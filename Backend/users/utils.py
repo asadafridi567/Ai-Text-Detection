@@ -14,7 +14,7 @@ def send_activation_email(request, user):
     activation_link = f"{request.scheme}://{request.get_host()}/api/verify-email/{uid}/{token}/"
 
     subject = "Activate your account"
-    message = f"Hi {user.username},\nPlease click the link to verify your email:\n{activation_link}"
+    message = f"Hi,\nPlease click the link to verify your email:\n{activation_link}"
 
     email = EmailMessage(subject, message, to=[user.email])
     email.send()
