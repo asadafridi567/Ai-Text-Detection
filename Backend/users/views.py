@@ -11,6 +11,7 @@ from django.utils.http import urlsafe_base64_decode
 from django.utils.encoding import force_str
 from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
+from django.contrib.auth import logout as django_logout
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
@@ -32,7 +33,6 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
-
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]
@@ -144,28 +144,26 @@ def google_login_callback(request):
         return redirect(f"{redirect_base}?error=ServerError")
 
 
-@csrf_exempt
-def validate_google_token(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            google_token = data.get('access_token')
+class SessionLogoutView(APIView):
+    permission_classes = [AllowAny] # Allow any request to hit this, even if not authenticated
 
-            if not google_token:
-                return JsonResponse({'detail': 'Access Token is missing.'}, status=400)
+    def post(self, request):
+        # django_logout invalidates the current session
+        # and removes the session cookie from the client.
+        response = Response({"detail": "Successfully logged out of session."}, status=status.HTTP_200_OK)
+        django_logout(request)
+        response.delete_cookie(settings.SESSION_COOKIE_NAME, domain=settings.SESSION_COOKIE_DOMAIN, path=settings.SESSION_COOKIE_PATH)
+        return Response({"detail": "Successfully logged out of session."}, status=status.HTTP_200_OK)
 
-            # Verify token
-            try:
-                idinfo = id_token.verify_oauth2_token(
-                    google_token,
-                    requests.Request(),
-                    audience=os.getenv("GOOGLE_CLIENT_ID")  # ← Optional: restrict to your client
-                )
-                return JsonResponse({'valid': True, 'email': idinfo.get('email')})
-            except ValueError:
-                return JsonResponse({'valid': False, 'error': 'Invalid token'}, status=401)
+# NEW: API View to check if a session is active
+class CheckSessionView(APIView):
+    permission_classes = [IsAuthenticated] # Only authenticated users (via session) can access
 
-        except json.JSONDecodeError:
-            return JsonResponse({'detail': 'Invalid JSON.'}, status=400)
-
-    return JsonResponse({'detail': 'Method not allowed.'}, status=405)
+    def get(self, request):
+        # If this view is reached, it means the user is authenticated via session.
+        # You can return basic user info if needed, e.g., request.user.email
+        return Response({
+            "detail": "Session is active.",
+            "username": request.user.name, # Assuming CustomUser has a 'name' field
+            "email": request.user.email
+        }, status=status.HTTP_200_OK)

@@ -10,6 +10,7 @@ urlpatterns = [
     path('verify-email/<uidb64>/<token>/', VerifyEmailView.as_view(), name='verify-email'),
     path('login/', LoginView.as_view(), name='login'),
     path('callback/', google_login_callback, name='google-login-callback'),
-    path('validate_token/', validate_google_token, name='validate_token'),
     path('protected/', ProtectedExampleView.as_view(), name='protected-example'),
+    path('session-logout/', SessionLogoutView.as_view(), name='session-logout'),
+    path('check-session/', CheckSessionView.as_view(), name='check-session'),
 ]

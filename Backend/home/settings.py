@@ -121,6 +121,7 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_THROTTLE_CLASSES': (
         'rest_framework.throttling.ScopedRateThrottle',
@@ -187,6 +188,7 @@ PASSWORD_RESET_TIMEOUT = 60 * 60 * 4  # 4 hours
 
 # CSRF
 CSRF_COOKIE_NAME = "csrftoken"
+CSRF_COOKIE_HTTPONLY = False # <--- Add this line or change to False
 
 """ Redis cache
 CACHES = {

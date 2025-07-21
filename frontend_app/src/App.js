@@ -10,6 +10,7 @@ import welcome from "./components/Welcome";
 import forgotpassword from "./components/ForgotPassword";
 import VerifyNotice from "./components/VerifyNotice"; 
 import EmailVerified from "./components/EmailVerified";
+import ProtectedRoute from "./components/ProtectedRoute"; // Import the protected route component
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
         <Route path="/email-verified" component={EmailVerified} />
         <Route path="/welcome" component={welcome} />
         <Route path="/forgotpassword" component={forgotpassword} />
+        <Route path="/protected" component={ProtectedRoute} />
       </Switch>
     </Router>
   );
