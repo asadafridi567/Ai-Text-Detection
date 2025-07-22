@@ -2,10 +2,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Plagiarism Report</title>
+    <title>Plagiarism & AI Detection Report</title>
     <style>
-        body { font-family: sans-serif; margin: 2cm; }
-        h1, h2, h3 { color: #333; }
+        body { font-family: sans-serif; margin: 2cm; line-height: 1.6; }
+        h1, h2, h3, h4 { color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 20px; }
+        .header-section { text-align: center; margin-bottom: 1cm; }
         .section { margin-bottom: 1.5cm; }
         .text-area {
             background-color: #f9f9f9;
@@ -14,6 +15,8 @@
             white-space: pre-wrap; /* Preserves whitespace and wraps text */
             font-family: monospace;
             font-size: 0.9em;
+            max-height: 20cm; /* Limit height for long texts */
+            overflow: auto; /* Add scroll if content exceeds max-height */
         }
         .report-summary table {
             width: 100%;
@@ -24,19 +27,41 @@
             border: 1px solid #eee;
             padding: 8px;
             text-align: left;
+            vertical-align: top;
         }
         .report-summary th {
             background-color: #f2f2f2;
         }
         .source-link {
-            color: blue;
+            color: #007bff; /* Bootstrap-like blue */
             text-decoration: underline;
+            word-break: break-all; /* Ensures long URLs wrap */
         }
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: white;
+            display: inline-block; /* For better padding */
+        }
+        .status-green { background-color: #28a745; } /* Success */
+        .status-red { background-color: #dc3545; }   /* Danger */
+        .status-orange { background-color: #ffc107; color: #333; } /* Warning */
+        .status-info { background-color: #17a2b8; }  /* Info */
+
+        .sentence-prediction-table th, .sentence-prediction-table td {
+            font-size: 0.85em;
+        }
+        .ai-generated { color: #dc3545; font-weight: bold; }
+        .human-written { color: #28a745; }
+        .borderline { color: #ffc107; }
+
         footer {
             position: running(footer);
             font-size: 0.8em;
             color: #777;
             text-align: center;
+            padding-top: 10px;
         }
         @page {
             @bottom-center {
@@ -46,45 +71,123 @@
     </style>
 </head>
 <body>
-    <div style="text-align: center;">
-        <h1>Plagiarism Detection Report</h1>
+    <div class="header-section">
+        <h1>Comprehensive Content Analysis Report</h1>
         <p>Generated on {{ current_date }}</p>
+        <p>Report by ZeroPlagiarism.co</p>
     </div>
 
     <div class="section">
         <h2>Original Text Submitted</h2>
-        <div class="text-area">
-            {{ original_text|safe }}
-        </div>
+        {% if original_text %}
+            <div class="text-area">
+                {{ original_text|safe }}
+            </div>
+        {% else %}
+            <p>No original text was provided for this report.</p>
+        {% endif %}
     </div>
 
     <div class="section">
         <h2>Plagiarism Analysis Results</h2>
-        {% if report.status == "duplicate_content_found" %}
-            <p><strong>Status:</strong> <span style="color: red;">Duplicate Content Found</span></p>
-            <h3>Sources Identified:</h3>
-            <div class="report-summary">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Link</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for link in report.duplicate_content_found_on_links %}
+        {% if plagiarism_status %}
+            <p><strong>Overall Status:</strong>
+                {% if plagiarism_status == "duplicate_content_found" %}
+                    <span class="status-badge status-red">Duplicate Content Found</span>
+                {% elif plagiarism_status == "no_duplicate_content" %}
+                    <span class="status-badge status-green">No Duplicate Content Found</span>
+                {% else %}
+                    <span class="status-badge status-info">{{ plagiarism_status|default:"N/A" }}</span>
+                {% endif %}
+            </p>
+
+            {% if plagiarism_links %}
+                <h3>Sources Identified:</h3>
+                <div class="report-summary">
+                    <table>
+                        <thead>
                             <tr>
-                                <td><a href="{{ link }}" class="source-link">{{ link }}</a></td>
+                                <th>Link</th>
                             </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% elif report.status == "no_duplicate_content" %}
-            <p><strong>Status:</strong> <span style="color: green;">No Duplicate Content Found</span></p>
-            <p>The submitted text appears to be original based on our analysis.</p>
+                        </thead>
+                        <tbody>
+                            {% for link in plagiarism_links %}
+                                <tr>
+                                    <td><a href="{{ link }}" class="source-link">{{ link }}</a></td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p>No specific duplicate sources were identified or provided.</p>
+            {% endif %}
         {% else %}
-            <p><strong>Status:</strong> {{ report.status|default:"N/A" }}</p>
-            <p>Could not retrieve detailed results for this status.</p>
+            <p>No plagiarism analysis results were provided for this report.</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <h2>AI Detection Results</h2>
+        {% if ai_report %}
+            <p><strong>AI Percentage:</strong>
+                {% if ai_report.ai_percentage is not none %}
+                    <span class="status-badge {% if ai_report.ai_percentage >= 65 %}status-red{% elif ai_report.ai_percentage >= 40 %}status-orange{% else %}status-green{% endif %}">
+                        {{ ai_report.ai_percentage }}%
+                    </span>
+                {% else %}
+                    N/A
+                {% endif %}
+            </p>
+            <p><strong>Total Sentences Analyzed:</strong> {{ ai_report.total_sentences|default:"N/A" }}</p>
+            <p><strong>AI-Generated Sentences Count:</strong> {{ ai_report.ai_sentences_count|default:"N/A" }}</p>
+
+            {% if ai_report.original_ai_sentences %}
+                <h3>Sentences Identified as AI-Generated:</h3>
+                <ul>
+                    {% for sentence in ai_report.original_ai_sentences %}
+                        <li class="ai-generated">{{ sentence }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if ai_report.borderline_sentences %}
+                <h3>Sentences Identified as Borderline (Potentially AI-Generated):</h3>
+                <ul>
+                    {% for sentence in ai_report.borderline_sentences %}
+                        <li class="borderline">{{ sentence }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if ai_report.sentence_predictions %}
+                <h3>Sentence-Level Predictions:</h3>
+                <div class="report-summary sentence-prediction-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Sentence</th>
+                                <th>AI Probability</th>
+                                <th>Label</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prediction in ai_report.sentence_predictions %}
+                                <tr>
+                                    <td>{{ prediction.sentence }}</td>
+                                    <td>{{ prediction.ai_probability|default:"N/A" }}</td>
+                                    <td class="{% if prediction.label == 'AI-Generated' %}ai-generated{% elif prediction.label == 'Human-Written' %}human-written{% else %}borderline{% endif %}">
+                                        {{ prediction.label|default:"N/A" }}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+
+        {% else %}
+            <p>No AI detection results were provided for this report.</p>
         {% endif %}
     </div>
 
