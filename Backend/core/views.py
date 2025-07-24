@@ -8,6 +8,7 @@ from django.template.loader import render_to_string
 from django.http import HttpResponse, FileResponse
 from django.conf import settings
 from datetime import datetime
+from .tasks import generate_pdf_report_task
 import os
 
 from .services import check_plagiarism
@@ -91,14 +92,11 @@ class PDFReportGenerationView(APIView):
     # permission_classes = [IsAuthenticated] # Or whatever permission is suitable
 
     def post(self, request, format=None):
-        if not WEASYPRINT_AVAILABLE:
-            return Response(
-                {"detail": "PDF generation service is not available on the server."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        # We no longer strictly need WEASYPRINT_AVAILABLE check here if always offloading
+        # But if you want a fallback or quick response for small PDFs, you could keep it.
+        # For this example, we'll offload unconditionally.
 
         original_text = request.data.get('original_text')
-        # This 'plagiarism_report' variable will now hold the *entire* outer report object
         full_report_data = request.data.get('plagiarism_report')
 
         if not original_text or not full_report_data:
@@ -107,34 +105,76 @@ class PDFReportGenerationView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Extract plagiarism-specific data from the main report object
         plagiarism_status = full_report_data.get('status')
-        plagiarism_links = full_report_data.get('duplicate_content_found_on_links', []) # Default to empty list
+        plagiarism_links = full_report_data.get('duplicate_content_found_on_links', [])
+        ai_report_data = full_report_data.get('plagiarism_report', {}) # Nested AI report
 
-        # Extract AI-specific data from the NESTED 'plagiarism_report' key
-        ai_report_data = full_report_data.get('plagiarism_report', {}) # Default to empty dict if not present
-
-        context = {
+        context_data = { # Renamed to context_data for clarity in task argument
             'original_text': original_text,
-            'plagiarism_status': plagiarism_status, # Pass plagiarism status directly
-            'plagiarism_links': plagiarism_links,   # Pass plagiarism links directly
-            'ai_report': ai_report_data,            # Pass AI data under a clear name
+            'plagiarism_status': plagiarism_status,
+            'plagiarism_links': plagiarism_links,
+            'ai_report': ai_report_data,
             'current_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
 
-        # Render HTML from template
-        # Ensure the template path matches your project structure (e.g., 'analysis/pdf_report.html')
-        # Based on your previous code, it was 'analysis/pdf_report.html', but here it's 'core/pdf_report.html'
-        # I'll use 'core/pdf_report.html' as per your provided snippet.
-        html_string = render_to_string('core/pdf_report.html', context)
-        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
+        # --- Dispatch the PDF generation task to Celery ---
+        # .delay() is a shortcut for .apply_async()
+        # We pass the context data to the task. Celery will serialize this.
+        task = generate_pdf_report_task.delay(context_data)
 
-        # Generate PDF bytes
-        pdf_bytes = html.write_pdf()
+        # Return an immediate response with the task ID
+        # The frontend can use this task ID to poll for the PDF status/URL
+        return Response(
+            {
+                "detail": "PDF generation started successfully.",
+                "task_id": task.id,
+                "status_url": f"/api/pdf-report/status/{task.id}/" # Example URL to check status
+            },
+            status=status.HTTP_202_ACCEPTED # 202 Accepted indicates processing has started
+        )
 
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="plagiarism_report.pdf"'
-        return response
+# Optional: Add a new view to check the status of the Celery task and retrieve the PDF
+class PDFReportStatusView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request, task_id, format=None):
+        from celery.result import AsyncResult
+        
+        task_result = AsyncResult(task_id)
+        
+        if task_result.state == 'PENDING':
+            response_data = {"status": "pending", "message": "PDF generation is pending."}
+            return Response(response_data, status=status.HTTP_200_OK)
+        elif task_result.state == 'STARTED':
+            response_data = {"status": "started", "message": "PDF generation is in progress."}
+            return Response(response_data, status=status.HTTP_200_OK)
+        elif task_result.state == 'SUCCESS':
+            result_data = task_result.get() # Get the result (which is the dict returned by the task)
+            if result_data.get("status") == "success":
+                pdf_url = result_data.get("pdf_url")
+                filename = result_data.get("filename", "plagiarism_report.pdf") # Default filename
+                response_data = {
+                    "status": "completed",
+                    "message": "PDF generated successfully.",
+                    "pdf_url": pdf_url,
+                    "filename": filename # Provide filename for frontend download
+                }
+                return Response(response_data, status=status.HTTP_200_OK)
+            else: # Task completed but with an error inside
+                response_data = {
+                    "status": "failed",
+                    "message": f"PDF generation failed: {result_data.get('message', 'Unknown error')}"
+                }
+                return Response(response_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        elif task_result.state == 'FAILURE':
+            response_data = {
+                "status": "failed",
+                "message": f"PDF generation failed due to an internal error: {task_result.info}"
+            }
+            return Response(response_data, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            response_data = {"status": task_result.state, "message": "Unknown task status."}
+            return Response(response_data, status=status.HTTP_200_OK)
     
 
 class AIDetectionView(APIView):

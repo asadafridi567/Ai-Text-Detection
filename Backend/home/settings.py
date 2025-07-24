@@ -199,6 +199,20 @@ if not RAPIDAPI_KEY:
     raise ValueError("RAPIDAPI_KEY environment variable not set.")
 if not PLAGIARISM_API_HOST:
     raise ValueError("PLAGIARISM_API_HOST environment variable not set.")
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0' # Use your Redis URL
+CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0' # Use your Redis URL
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Karachi' # Or your appropriate timezone
+CELERY_ENABLE_UTC = True
+
+# Directory where generated PDFs will be stored temporarily
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/' 
+  
 """ Redis cache
 CACHES = {
     "default": {
