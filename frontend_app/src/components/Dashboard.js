@@ -55,9 +55,6 @@ class Dashboard extends Component {
                 error: null,
             });
         }
-        // --- FIX FOR ISSUE 1: Reset the file input value
-        // This allows the onChange event to fire again if the same file is selected
-        // or a new file after the first one.
         if (this.fileInputRef.current) {
             this.fileInputRef.current.value = '';
         }
@@ -298,7 +295,7 @@ class Dashboard extends Component {
                         <Card className="mt-4 shadow-sm">
                             <Card.Body>
                                 <h3 className="h5 fw-semibold text-dark mb-3">Results:</h3>
-                                {/* --- FIX FOR ISSUE 2: Conditional rendering of API response --- */}
+                                {/* Plagiarism Detection (PDF generation status) */}
                                 {activeFeature === 'plagiarism-detection' && pdfTaskId && !pdfDownloadUrl ? (
                                     <p className="text-info">
                                         PDF report is being generated in the background. Task ID: <span className="font-monospace small">{pdfTaskId}</span>.
@@ -323,16 +320,79 @@ class Dashboard extends Component {
                                         </Button>
                                         <p className="small text-muted mt-2">File: {apiResponse.filename || 'report.pdf'}</p>
                                     </div>
-                                ) : activeFeature === 'ai-detection' && apiResponse.ai_score !== undefined ? (
-                                    // Display AI Detection results
+                                ) : activeFeature === 'ai-detection' && (apiResponse.ai_percentage !== undefined || apiResponse.ai_sentences_count !== undefined) ? (
+                                    // AI Detection Results - UPDATED TO MATCH PROVIDED JSON
                                     <div>
-                                        <p className="mb-2"><strong>AI Score:</strong> <span className={`fw-bold ${apiResponse.ai_score > 0.5 ? 'text-danger' : 'text-success'}`}>{Math.round(apiResponse.ai_score * 100)}% AI-generated</span></p>
-                                        <p className="mb-2"><strong>Human Score:</strong> <span className={`fw-bold ${apiResponse.human_score > 0.5 ? 'text-success' : 'text-danger'}`}>{Math.round(apiResponse.human_score * 100)}% Human-written</span></p>
+                                        <p className="mb-2">
+                                            <strong>AI Percentage:</strong>{' '}
+                                            {apiResponse.ai_percentage !== undefined ? (
+                                                <span className={`fw-bold ${apiResponse.ai_percentage > 0.5 ? 'text-danger' : 'text-success'}`}>
+                                                    {Math.round(apiResponse.ai_percentage * 100)}% AI-generated
+                                                </span>
+                                            ) : (
+                                                <span className="text-muted">N/A</span>
+                                            )}
+                                        </p>
                                         {apiResponse.ai_sentences_count !== undefined && (
-                                            <p className="mb-2"><strong>AI Sentences:</strong> {apiResponse.ai_sentences_count}</p>
+                                            <p className="mb-2"><strong>AI Sentences Count:</strong> {apiResponse.ai_sentences_count}</p>
                                         )}
                                         {apiResponse.total_sentences !== undefined && (
                                             <p><strong>Total Sentences:</strong> {apiResponse.total_sentences}</p>
+                                        )}
+
+                                        {apiResponse.ai_sentences && Array.isArray(apiResponse.ai_sentences) && apiResponse.ai_sentences.length > 0 && (
+                                            <div className="mt-3">
+                                                <h5>Detected AI Sentences:</h5>
+                                                <ul className="list-unstyled small">
+                                                    {apiResponse.ai_sentences.map((sentence, index) => (
+                                                        <li key={index} className="mb-1 text-danger">{sentence}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {apiResponse.borderline_sentences && Array.isArray(apiResponse.borderline_sentences) && apiResponse.borderline_sentences.length > 0 && (
+                                            <div className="mt-3">
+                                                <h5>Borderline Sentences:</h5>
+                                                <ul className="list-unstyled small">
+                                                    {apiResponse.borderline_sentences.map((sentence, index) => (
+                                                        <li key={index} className="mb-1 text-warning">{sentence}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {apiResponse.sentence_predictions && Array.isArray(apiResponse.sentence_predictions) && apiResponse.sentence_predictions.length > 0 && (
+                                            <div className="mt-3">
+                                                <h5>Sentence-level Predictions:</h5>
+                                                <ul className="list-unstyled small">
+                                                    {apiResponse.sentence_predictions.map((prediction, index) => (
+                                                        <li key={index} className="mb-2">
+                                                            <strong>Sentence:</strong> {prediction.sentence}<br/>
+                                                            <strong>Prediction:</strong> <span className={`fw-bold ${prediction.label === 'Human-Written' ? 'text-success' : 'text-danger'}`}>{prediction.label}</span> (AI Probability: {Math.round(prediction.ai_probability * 100)}%)
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : activeFeature === 'plagiarism-detection' && apiResponse.status === 'duplicate_content_found' ? (
+                                    // Plagiarism Detection (direct JSON result from screenshot)
+                                    <div>
+                                        <p className="mb-2">
+                                            <strong>Status:</strong> <span className="fw-bold text-danger">Duplicate content found!</span>
+                                        </p>
+                                        {apiResponse.duplicate_content_found_on_links && Array.isArray(apiResponse.duplicate_content_found_on_links) && apiResponse.duplicate_content_found_on_links.length > 0 && (
+                                            <div className="mt-3">
+                                                <h5>Found on Links:</h5>
+                                                <ul className="list-unstyled small">
+                                                    {apiResponse.duplicate_content_found_on_links.map((link, index) => (
+                                                        <li key={index} className="mb-1">
+                                                            <a href={link} target="_blank" rel="noopener noreferrer">{link}</a>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
                                         )}
                                         {apiResponse.original_text && (
                                             <div className="mt-3">
@@ -342,12 +402,31 @@ class Dashboard extends Component {
                                         )}
                                     </div>
                                 ) : activeFeature === 'humanize' && apiResponse.modified_text ? (
-                                    // Display Humanize results
+                                    // Humanize Results
                                     <div>
-                                        <p className="mb-2"><strong>Original Text:</strong> <span className="text-muted small">{apiResponse.original_text}</span></p>
+                                        {apiResponse.original_text && (
+                                            <p className="mb-2"><strong>Original Text:</strong> <span className="text-muted small">{apiResponse.original_text}</span></p>
+                                        )}
                                         <p className="mb-2"><strong>Humanized Text:</strong></p>
                                         <p className="lead">{apiResponse.modified_text}</p>
-                                        {apiResponse.rewrites && apiResponse.rewrites.length > 0 && (
+
+                                        {apiResponse.ai_sentences_count !== undefined && (
+                                            <p className="mb-2"><strong>AI Sentences Count (from original):</strong> {apiResponse.ai_sentences_count}</p>
+                                        )}
+                                        {apiResponse.total_sentences !== undefined && (
+                                            <p className="mb-2"><strong>Total Sentences (from original):</strong> {apiResponse.total_sentences}</p>
+                                        )}
+                                        {apiResponse.original_ai_sentences && Array.isArray(apiResponse.original_ai_sentences) && apiResponse.original_ai_sentences.length > 0 && (
+                                            <div className="mt-3">
+                                                <h5>Original AI Sentences:</h5>
+                                                <ul className="list-unstyled small">
+                                                    {apiResponse.original_ai_sentences.map((sentence, index) => (
+                                                        <li key={index} className="mb-1">{sentence}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                        {apiResponse.rewrites && Array.isArray(apiResponse.rewrites) && apiResponse.rewrites.length > 0 && (
                                             <div className="mt-3">
                                                 <h5>Sentence Rewrites:</h5>
                                                 <ul className="list-unstyled small">
@@ -362,7 +441,7 @@ class Dashboard extends Component {
                                         )}
                                     </div>
                                 ) : (
-                                    // Fallback to raw JSON if structure is unexpected or for other features
+                                    // Fallback to raw JSON if structure is unexpected
                                     <pre className="small text-dark text-wrap">
                                         {JSON.stringify(apiResponse, null, 2)}
                                     </pre>
