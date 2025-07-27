@@ -190,6 +190,29 @@ PASSWORD_RESET_TIMEOUT = 60 * 60 * 4  # 4 hours
 CSRF_COOKIE_NAME = "csrftoken"
 CSRF_COOKIE_HTTPONLY = False # <--- Add this line or change to False
 
+# Add these lines at the end or in a dedicated "API Keys" section
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+PLAGIARISM_API_HOST = os.getenv("PLAGIARISM_API_HOST")
+
+# Ensure these are not None in production
+if not RAPIDAPI_KEY:
+    raise ValueError("RAPIDAPI_KEY environment variable not set.")
+if not PLAGIARISM_API_HOST:
+    raise ValueError("PLAGIARISM_API_HOST environment variable not set.")
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0' # Use your Redis URL
+CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0' # Use your Redis URL
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Karachi' # Or your appropriate timezone
+CELERY_ENABLE_UTC = True
+
+# Directory where generated PDFs will be stored temporarily
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = '/media/' 
+  
 """ Redis cache
 CACHES = {
     "default": {
