@@ -12,7 +12,7 @@ import VerifyNotice from "./components/VerifyNotice";
 import EmailVerified from "./components/EmailVerified";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Dashboard from "./components/Dashboard";
-
+import Blogs from "./components/Blogs"
 function App() {
   return (
     <Router>
@@ -26,6 +26,7 @@ function App() {
         <Route path="/forgotpassword" component={forgotpassword} />
         <Route path="/protected" component={ProtectedRoute} />
         <ProtectedRoute path="/dashboard" component={Dashboard} />
+        <Route path="/blogs" component={Blogs} />
       </Switch>
     </Router>
   );

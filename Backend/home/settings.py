@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     # Custom apps
     'core',
     'users',
+    'blogs',
 
     # Third-party
     'corsheaders',
@@ -212,6 +213,13 @@ CELERY_ENABLE_UTC = True
 # Directory where generated PDFs will be stored temporarily
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/' 
+
+ALLOWED_HOSTS = [
+    '127.0.0.1',  # Standard localhost IP
+    'localhost',  # Standard localhost name
+    'c00edd481226.ngrok-free.app', # <<< REPLACE THIS WITH YOUR ACTUAL NGROK URL
+]
+
   
 """ Redis cache
 CACHES = {
