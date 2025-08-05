@@ -8,6 +8,14 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [isFeaturesOpen, setIsFeaturesOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+  const handleSignOut = () => {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  setIsLoggedIn(false);
+  window.location.href = "/"; // optional redirect to home
+};
+
 
   useEffect(() => {
     const accessToken = localStorage.getItem("access_token");
@@ -75,16 +83,19 @@ export function Header() {
 
         {/* Desktop Actions */}
         <div className="hidden md:flex items-center space-x-4">
-          {!isLoggedIn && (
-          <Button variant="ghost" asChild>
-           <Link to="/sign-in">Sign In</Link>
-           </Button>
-           )}
-          <Button variant="hero" asChild>
-            <Link to="/dashboard">Get Started</Link>
-          </Button>
-        </div>
-
+  {!isLoggedIn ? (
+    <Button variant="ghost" asChild>
+      <Link to="/sign-in">Sign In</Link>
+    </Button>
+  ) : (
+    <Button variant="ghost" onClick={handleSignOut}>
+      Sign Out
+    </Button>
+  )}
+  <Button variant="hero" asChild>
+    <Link to="/dashboard">Get Started</Link>
+  </Button>
+</div>
         {/* Mobile Menu Button */}
         <button
           className="md:hidden"
@@ -157,11 +168,22 @@ export function Header() {
               Contact
             </Link>
             <div className="pt-4 space-y-2">
-              {!isLoggedIn && (
+              {!isLoggedIn ? (
                 <Button variant="ghost" className="w-full" asChild>
                   <Link to="/sign-in" onClick={() => setIsMenuOpen(false)}>
                     Sign In
                   </Link>
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => {
+                    handleSignOut();
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  Sign Out
                 </Button>
               )}
               <Button variant="hero" className="w-full" asChild>
@@ -170,6 +192,7 @@ export function Header() {
                 </Link>
               </Button>
             </div>
+
           </nav>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState,useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -14,6 +14,7 @@ import {
   CheckCircle,
   ExternalLink,
 } from "lucide-react";
+import { jsPDF } from "jspdf"; 
 
 export default function PlagiarismChecker() {
   const [inputText, setInputText] = useState("");
@@ -21,37 +22,69 @@ export default function PlagiarismChecker() {
   const [results, setResults] = useState<any>(null);
   const [reportBlobUrl, setReportBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
+const [selectedFile, setSelectedFile] = useState<File | null>(null);
+const allowedTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+
+
+const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (!allowedTypes.includes(file.type)) {
+    setError("Only PDF and DOCX files are supported.");
+    setSelectedFile(null);
+    return;
+  }
+
+  setError("");
+  setSelectedFile(file);
+  setInputText(""); // Clear text area
+};
+
 
 
 const handleCheck = async () => {
-  if (!inputText.trim()) return;
+  if (!inputText.trim() && !selectedFile) return;
 
   setIsChecking(true);
   setResults(null);
   setError("");
 
-
   try {
-    const response = await fetch("http://localhost:8000/api/plagiarism-check/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ text_content: inputText.trim() })
-    });
+    let response;
+
+    if (selectedFile) {
+      // File upload case
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      response = await fetch("http://localhost:8000/api/plagiarism-check/", {
+        method: "POST",
+        body: formData
+      });
+    } else {
+      // Text input case
+      response = await fetch("http://localhost:8000/api/plagiarism-check/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ text_content: inputText.trim() })
+      });
+    }
 
     if (!response.ok) throw new Error("Plagiarism check failed");
 
     const data = await response.json();
-
     const originalityScore = data.status === "duplicate_content_found" ? 0 : 100;
     const matches = data.duplicate_content_found_on_links || [];
-setResults({
-  originalityScore,
-  matches,
-  totalSources: 15000000000,
-  scanTime: "2.3 seconds"
-});
+
+    setResults({
+      originalityScore,
+      matches,
+      totalSources: 15000000000,
+      scanTime: "2.3 seconds"
+    });
 
   } catch (err) {
     console.error("Error checking plagiarism:", err);
@@ -59,6 +92,46 @@ setResults({
   } finally {
     setIsChecking(false);
   }
+};
+
+const handleDownloadReport = () => {
+  if (!results) return;
+
+  const originalityScore = results.originalityScore ?? "N/A";
+  const matches = results.matches ?? [];
+  const totalSources = results.totalSources ?? "N/A";
+  const scanTime = results.scanTime ?? "N/A";
+
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text("Plagiarism Report", 10, 10);
+  doc.setFontSize(12);
+  doc.text("=======================", 10, 20);
+
+  doc.text(`Originality Score: ${originalityScore}%`, 10, 30);
+  doc.text(`Issues Found: ${originalityScore < 100 ? "Yes" : "No"}`, 10, 40);
+  doc.text(`Scanned Sources: ${totalSources.toLocaleString?.() ?? totalSources}`, 10, 50);
+  doc.text(`Duration: ${scanTime}`, 10, 60);
+
+  doc.text("Potential Matches:", 10, 75);
+
+  const matchesText = matches.length
+    ? matches.map((url: string, i: number) => `${i + 1}. ${url}`).join("\n")
+    : "No matches found.";
+
+  const lines = doc.splitTextToSize(matchesText, 180);
+  let yOffset = 85;
+
+  lines.forEach((line: string) => {
+    if (yOffset > 280) {
+      doc.addPage();
+      yOffset = 20;
+    }
+    doc.text(line, 10, yOffset);
+    yOffset += 10;
+  });
+
+  doc.save("plagiarism-report.pdf");
 };
 
 
@@ -99,24 +172,52 @@ setResults({
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <Textarea
-                      placeholder="Paste your text here to check for plagiarism..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      className="min-h-[400px] resize-none"
-                    />
-<div className="flex items-center justify-between">
-  <span className="text-sm text-muted-foreground">
-    {inputText.length} / 10000 characters
-  </span>
-  <Button
-    onClick={handleCheck}
-    disabled={!inputText.trim() || isChecking}
-    variant="hero"
-  >
-    {isChecking ? "Scanning..." : "Check Plagiarism"}
-  </Button>
-</div>
+  <Textarea
+    placeholder="Paste your text here to check for plagiarism..."
+    value={inputText}
+    onChange={(e) => {
+      setInputText(e.target.value);
+      setSelectedFile(null); // clear selected file if typing
+    }}
+    className="min-h-[400px] resize-none"
+  />
+
+  {/* Styled File Upload Button */}
+  <input
+  type="file"
+  onChange={handleFileUpload}
+  accept=".pdf,.docx"
+  className="block w-full text-sm text-gray-700 
+         file:mr-4 file:py-2 file:px-4
+         file:rounded-md file:border-0
+         file:text-sm file:font-semibold
+         file:bg-primary file:text-white
+         hover:file:bg-primary/90
+         focus:outline-none"
+/>
+
+  <div className="flex items-center justify-between flex-wrap gap-2">
+    <span className="text-sm text-muted-foreground">
+      {inputText.length} / 10000 characters
+    </span>
+    <Button
+      onClick={handleCheck}
+      disabled={(!inputText.trim() && !selectedFile) || isChecking}
+      variant="hero"
+    >
+      {isChecking ? "Scanning..." : "Check Plagiarism"}
+    </Button>
+  </div>
+
+  {error && (
+    <p className="text-sm text-red-500 pt-2">{error}</p>
+  )}
+
+  <div className="text-xs text-muted-foreground">
+    <p>✓ Scans 15+ billion web pages</p>
+    <p>✓ Academic papers and journals</p>
+    <p>✓ Books and publications</p>
+  </div>
 
 {/* ✅ Add this just below the button row */}
 {error && (
@@ -125,11 +226,6 @@ setResults({
   </p>
 )}
 
-                    <div className="text-xs text-muted-foreground">
-                      <p>✓ Scans 15+ billion web pages</p>
-                      <p>✓ Academic papers and journals</p>
-                      <p>✓ Books and publications</p>
-                    </div>
                   </CardContent>
                 </Card>
 
@@ -215,7 +311,15 @@ setResults({
                        
                       </div>
                     )}
+                    {results && (
+  <Button onClick={handleDownloadReport} className="mt-4 w-full"  variant="outline">
+    <Download className="w-4 h-4 mr-2" />
+    Download Plagiarism Report
+  </Button>
+)}
                   </CardContent>
+
+
                 </Card>
               </div>
             </div>

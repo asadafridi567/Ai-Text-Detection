@@ -8,44 +8,102 @@ import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
 import { FileText, Upload, Download, Zap, RefreshCw, Copy } from "lucide-react";
 import { toast } from "sonner";
-
+import jsPDF from "jspdf"; 
 
 export default function Humanizer() {
   const [inputText, setInputText] = useState("");
   const [outputText, setOutputText] = useState("");
   const [isHumanizing, setIsHumanizing] = useState(false);
   const [error, setError] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const allowedTypes = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+];
+
+const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (!allowedTypes.includes(file.type)) {
+    setError("Only PDF and DOCX files are supported.");
+    setSelectedFile(null);
+    return;
+  }
+
+  setError("");
+  setSelectedFile(file);
+  setInputText(""); // clear text area
+};
+
 
   const handleHumanize = async () => {
-    if (!inputText.trim()) return;
+  if (!inputText.trim() && !selectedFile) return;
 
-    setIsHumanizing(true);
-    setOutputText("");
-    setError("");
+  setIsHumanizing(true);
+  setOutputText("");
+  setError("");
 
-    try {
-      const response = await fetch("http://localhost:8000/api/humanize/", {
+  try {
+    let response;
+
+    if (selectedFile) {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      response = await fetch("http://localhost:8000/api/humanize/", {
+        method: "POST",
+        body: formData
+      });
+    } else {
+      response = await fetch("http://localhost:8000/api/humanize/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({ text: inputText })
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Something went wrong.");
-      }
-
-      const data = await response.json();
-      setOutputText(data.modified_text || "No output received.");
-    } catch (err) {
-      console.error("Humanization Error:", err);
-      setError("⚠️ Failed to humanize the text. Please try again.");
-    } finally {
-      setIsHumanizing(false);
     }
-  };
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || "Something went wrong.");
+    }
+
+    const data = await response.json();
+    setOutputText(data.modified_text || "No output received.");
+  } catch (err) {
+    console.error("Humanization Error:", err);
+    setError("⚠️ Failed to humanize the text. Please try again.");
+  } finally {
+    setIsHumanizing(false);
+  }
+};
+
+const handleDownloadReport = () => {
+  if (!outputText.trim()) return;
+
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text("Humanized Text Report", 10, 10);
+  doc.setFontSize(12);
+  doc.text("=======================", 10, 20);
+
+  const lines = doc.splitTextToSize(outputText, 180);
+  let yOffset = 30;
+
+  lines.forEach((line: string) => {
+    if (yOffset > 280) {
+      doc.addPage();
+      yOffset = 20;
+    }
+    doc.text(line, 10, yOffset);
+    yOffset += 10;
+  });
+
+  doc.save("humanized-text-report.pdf");
+};
 
 const handleCopy = () => {
   if (!inputText.trim()) return;
@@ -89,39 +147,58 @@ const handleCopy = () => {
                       Paste your AI-generated text that needs humanization
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+<CardContent className="space-y-4">
+  <Textarea
+    placeholder="Paste the text you want to humanize..."
+    value={inputText}
+    onChange={(e) => {
+      setInputText(e.target.value);
+      setSelectedFile(null); // clear file if manual input
+    }}
+    className="min-h-[200px] resize-none"
+  />
 
+  <input
+    type="file"
+    onChange={handleFileUpload}
+    accept=".pdf,.doc,.docx"
+    className="block w-full text-sm text-gray-700 
+               file:mr-4 file:py-2 file:px-4
+               file:rounded-md file:border-0
+               file:text-sm file:font-semibold
+               file:bg-primary file:text-white
+               hover:file:bg-primary/90
+               focus:outline-none"
+  />
 
-                    <Textarea
-                      placeholder="Paste your AI-generated text here for humanization..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      className="min-h-[400px] resize-none"
-                    />
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">
-                        {inputText.length} / 3000 characters
-                      </span>
-                      <Button
-                        onClick={handleHumanize}
-                        disabled={!inputText.trim() || isHumanizing}
-                        variant="hero"
-                      >
-                        {isHumanizing ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Humanizing...
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="w-4 h-4 mr-2" />
-                            Humanize Text
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    {error && <p className="text-sm text-red-500 pt-2">{error}</p>}
-                  </CardContent>
+  <div className="flex items-center justify-between flex-wrap gap-2">
+    <span className="text-sm text-muted-foreground">
+      {inputText.length} / 5000 characters
+    </span>
+
+    <Button
+      onClick={handleHumanize}
+      disabled={(!inputText.trim() && !selectedFile) || isHumanizing}
+      variant="hero"
+    >
+      {isHumanizing ? (
+        <>
+          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+          Humanizing...
+        </>
+      ) : (
+        <>
+          <Zap className="w-4 h-4 mr-2" />
+          Humanize Text
+        </>
+      )}
+    </Button>
+  </div>
+                      {error && (
+                      <p className="text-red-500 text-sm mt-2">{error}</p>
+                    )}
+</CardContent>
+
                 </Card>
 
                 {/* Output Section */}
@@ -177,10 +254,11 @@ const handleCopy = () => {
     <Copy className="w-4 h-4 mr-2" />
     Copy Text
   </Button>
-  <Button variant="outline" className="flex-1" onClick={() => alert("Coming soon!")}>
-    <Download className="w-4 h-4 mr-2" />
-    Download
-  </Button>
+<Button variant="outline" className="flex-1" onClick={handleDownloadReport}>
+  <Download className="w-4 h-4 mr-2" />
+  Download Report
+</Button>
+
 </div>
 
                       </div>
