@@ -66,7 +66,7 @@ const SignUp = () => {
           title: "Account Created",
           description: "Please check your email to verify your account.",
         });
-        navigate("/verify-notice");
+        navigate("/email-verification", { replace: true });
       } else {
         toast({
           variant: "destructive",

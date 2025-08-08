@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,21 +19,21 @@ import { FcGoogle } from "react-icons/fc";
 import { useToast } from "../hooks/use-toast";
 import axios from "../api/axios";
 
-// Define the schema using Zod
 const SignInSchema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
   password: z.string().min(6, { message: "Password must be at least 6 characters" }),
 });
-
-// Infer the type from the schema
 type SignInData = z.infer<typeof SignInSchema>;
-
 const GoogleIcon = FcGoogle as unknown as React.FC<{ className?: string }>;
 
 const SignIn = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
+
+  // get redirect path or fallback to dashboard
+  const redirectPath = searchParams.get("redirect") || "/dashboard";
 
   const {
     register,
@@ -66,7 +66,8 @@ const SignIn = () => {
           description: "Welcome back!",
         });
 
-        navigate("/");
+        // redirect to the intended page
+        navigate(redirectPath, { replace: true });
       } else {
         toast({
           title: "Login Failed",
@@ -86,23 +87,23 @@ const SignIn = () => {
   };
 
   const handleGoogleSignIn = async () => {
-  const accessToken = localStorage.getItem("access_token");
+    const accessToken = localStorage.getItem("access_token");
 
-  if (accessToken) {
-    try {
-      await axios.get("/user/profile"); // or a token validation endpoint
-      // Token is valid, redirect to dashboard
-      navigate("/dashboard");
-      return;
-    } catch (error) {
-      // Token invalid or expired — fallback to Google login
-      console.log("Access token invalid, redirecting to Google login");
+    if (accessToken) {
+      try {
+        await axios.get("/user/profile");
+        navigate("/dashboard");
+        return;
+      } catch {
+        console.log("Access token invalid, redirecting to Google login");
+      }
     }
-  }
 
-  // No valid token found, redirect to Google OAuth
-  window.location.href = "http://localhost:8000/accounts/google/login/";
-};
+    // preserve redirect path for Google OAuth too
+    window.location.href = `http://localhost:8000/accounts/google/login/?redirect=${encodeURIComponent(
+      redirectPath
+    )}`;
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-200 via-purple-200 to-white p-4">

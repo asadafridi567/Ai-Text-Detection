@@ -17,10 +17,14 @@ export function Header() {
 };
 
 
-  useEffect(() => {
-    const accessToken = localStorage.getItem("access_token");
-    setIsLoggedIn(!!accessToken);
-  }, []);
+useEffect(() => {
+  const accessToken = localStorage.getItem("access_token");
+  const googleToken = localStorage.getItem("google_token"); // or whatever you store
+
+  // If either exists, mark user as logged in
+  setIsLoggedIn(!!accessToken || !!googleToken);
+}, []);
+
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
