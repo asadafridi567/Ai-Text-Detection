@@ -153,7 +153,7 @@ AUTHENTICATION_BACKENDS = (
     'allauth.account.auth_backends.AuthenticationBackend',  # Allauth backend
 )
 
-LOGIN_REDIRECT_URL = 'http://localhost:3000/welcome'
+LOGIN_REDIRECT_URL = 'http://localhost:3000/'
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
