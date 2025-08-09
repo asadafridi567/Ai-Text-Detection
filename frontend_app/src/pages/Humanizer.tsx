@@ -1,14 +1,28 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { Badge } from "../components/ui/badge";
 import { Progress } from "../components/ui/progress";
 import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
-import { FileText, Upload, Download, Zap, RefreshCw, Copy } from "lucide-react";
+import {
+  FileText,
+  Upload,
+  Download,
+  Zap,
+  RefreshCw,
+  Copy
+} from "lucide-react";
 import { toast } from "sonner";
-import jsPDF from "jspdf"; 
+import jsPDF from "jspdf";
+import instance from "../api/axios"; // using axios instance
 
 export default function Humanizer() {
   const [inputText, setInputText] = useState("");
@@ -18,98 +32,87 @@ export default function Humanizer() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const allowedTypes = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-];
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ];
 
-const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  if (!allowedTypes.includes(file.type)) {
-    setError("Only PDF and DOCX files are supported.");
-    setSelectedFile(null);
-    return;
-  }
+    if (!allowedTypes.includes(file.type)) {
+      setError("Only PDF and DOCX files are supported.");
+      setSelectedFile(null);
+      return;
+    }
 
-  setError("");
-  setSelectedFile(file);
-  setInputText(""); // clear text area
-};
-
+    setError("");
+    setSelectedFile(file);
+    setInputText("");
+  };
 
   const handleHumanize = async () => {
-  if (!inputText.trim() && !selectedFile) return;
+    if (!inputText.trim() && !selectedFile) return;
 
-  setIsHumanizing(true);
-  setOutputText("");
-  setError("");
+    setIsHumanizing(true);
+    setOutputText("");
+    setError("");
 
-  try {
-    let response;
+    try {
+      let res;
 
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
 
-      response = await fetch("http://localhost:8000/api/humanize/", {
-        method: "POST",
-        body: formData
-      });
-    } else {
-      response = await fetch("http://localhost:8000/api/humanize/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ text: inputText })
-      });
+        res = await instance.post("humanize/", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+      } else {
+        res = await instance.post("humanize/", { text: inputText });
+      }
+
+      setOutputText(res.data.modified_text || "No output received.");
+    } catch (err: any) {
+      console.error("Humanization Error:", err);
+      setError(
+        err.response?.data?.detail ||
+          "⚠️ Failed to humanize the text. Please try again."
+      );
+    } finally {
+      setIsHumanizing(false);
     }
+  };
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || "Something went wrong.");
-    }
+  const handleDownloadReport = () => {
+    if (!outputText.trim()) return;
 
-    const data = await response.json();
-    setOutputText(data.modified_text || "No output received.");
-  } catch (err) {
-    console.error("Humanization Error:", err);
-    setError("⚠️ Failed to humanize the text. Please try again.");
-  } finally {
-    setIsHumanizing(false);
-  }
-};
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Humanized Text Report", 10, 10);
+    doc.setFontSize(12);
+    doc.text("=======================", 10, 20);
 
-const handleDownloadReport = () => {
-  if (!outputText.trim()) return;
+    const lines = doc.splitTextToSize(outputText, 180);
+    let yOffset = 30;
 
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text("Humanized Text Report", 10, 10);
-  doc.setFontSize(12);
-  doc.text("=======================", 10, 20);
+    lines.forEach((line: string) => {
+      if (yOffset > 280) {
+        doc.addPage();
+        yOffset = 20;
+      }
+      doc.text(line, 10, yOffset);
+      yOffset += 10;
+    });
 
-  const lines = doc.splitTextToSize(outputText, 180);
-  let yOffset = 30;
+    doc.save("humanized-text-report.pdf");
+  };
 
-  lines.forEach((line: string) => {
-    if (yOffset > 280) {
-      doc.addPage();
-      yOffset = 20;
-    }
-    doc.text(line, 10, yOffset);
-    yOffset += 10;
-  });
-
-  doc.save("humanized-text-report.pdf");
-};
-
-const handleCopy = () => {
-  if (!inputText.trim()) return;
-  navigator.clipboard.writeText(inputText);
-  toast.success("Text copied to clipboard!");
-};
+  const handleCopy = () => {
+    if (!outputText.trim()) return;
+    navigator.clipboard.writeText(outputText);
+    toast.success("Text copied to clipboard!");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -126,7 +129,8 @@ const handleCopy = () => {
               Text Humanizer
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Transform AI-generated text into natural, human-like content that passes AI detectors while maintaining meaning.
+              Transform AI-generated text into natural, human-like content that
+              passes AI detectors while maintaining meaning.
             </p>
           </div>
         </section>
@@ -147,58 +151,53 @@ const handleCopy = () => {
                       Paste your AI-generated text that needs humanization
                     </CardDescription>
                   </CardHeader>
-<CardContent className="space-y-4">
-  <Textarea
-    placeholder="Paste the text you want to humanize..."
-    value={inputText}
-    onChange={(e) => {
-      setInputText(e.target.value);
-      setSelectedFile(null); // clear file if manual input
-    }}
-    className="min-h-[200px] resize-none"
-  />
+                  <CardContent className="space-y-4">
+                    <Textarea
+                      placeholder="Paste the text you want to humanize..."
+                      value={inputText}
+                      onChange={(e) => {
+                        setInputText(e.target.value);
+                        setSelectedFile(null);
+                      }}
+                      className="min-h-[200px] resize-none"
+                    />
 
-  <input
-    type="file"
-    onChange={handleFileUpload}
-    accept=".pdf,.doc,.docx"
-    className="block w-full text-sm text-gray-700 
-               file:mr-4 file:py-2 file:px-4
-               file:rounded-md file:border-0
-               file:text-sm file:font-semibold
-               file:bg-primary file:text-white
-               hover:file:bg-primary/90
-               focus:outline-none"
-  />
+                    <input
+                      type="file"
+                      onChange={handleFileUpload}
+                      accept=".pdf,.doc,.docx"
+                      className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90 focus:outline-none"
+                    />
 
-  <div className="flex items-center justify-between flex-wrap gap-2">
-    <span className="text-sm text-muted-foreground">
-      {inputText.length} / 5000 characters
-    </span>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {inputText.length} / 5000 characters
+                      </span>
 
-    <Button
-      onClick={handleHumanize}
-      disabled={(!inputText.trim() && !selectedFile) || isHumanizing}
-      variant="hero"
-    >
-      {isHumanizing ? (
-        <>
-          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-          Humanizing...
-        </>
-      ) : (
-        <>
-          <Zap className="w-4 h-4 mr-2" />
-          Humanize Text
-        </>
-      )}
-    </Button>
-  </div>
-                      {error && (
+                      <Button
+                        onClick={handleHumanize}
+                        disabled={
+                          (!inputText.trim() && !selectedFile) || isHumanizing
+                        }
+                        variant="hero"
+                      >
+                        {isHumanizing ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Humanizing...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-4 h-4 mr-2" />
+                            Humanize Text
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {error && (
                       <p className="text-red-500 text-sm mt-2">{error}</p>
                     )}
-</CardContent>
-
+                  </CardContent>
                 </Card>
 
                 {/* Output Section */}
@@ -223,7 +222,9 @@ const handleCopy = () => {
                     ) : isHumanizing ? (
                       <div className="space-y-4 h-[350px] flex items-center justify-center">
                         <div className="text-center w-full">
-                          <div className="text-lg font-semibold mb-4">Humanizing your text...</div>
+                          <div className="text-lg font-semibold mb-4">
+                            Humanizing your text...
+                          </div>
                           <Progress value={60} className="w-full mb-4" />
                           <div className="space-y-2 text-sm text-muted-foreground">
                             <p>✓ Analyzing AI patterns</p>
@@ -235,7 +236,10 @@ const handleCopy = () => {
                     ) : (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between mb-4">
-                          <Badge variant="secondary" className="bg-success/10 text-success">
+                          <Badge
+                            variant="secondary"
+                            className="bg-success/10 text-success"
+                          >
                             Successfully Humanized
                           </Badge>
                           <div className="text-sm text-muted-foreground">
@@ -250,17 +254,23 @@ const handleCopy = () => {
                         </div>
 
                         <div className="flex gap-2">
-  <Button variant="outline" className="flex-1" onClick={handleCopy}>
-    <Copy className="w-4 h-4 mr-2" />
-    Copy Text
-  </Button>
-<Button variant="outline" className="flex-1" onClick={handleDownloadReport}>
-  <Download className="w-4 h-4 mr-2" />
-  Download Report
-</Button>
-
-</div>
-
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={handleCopy}
+                          >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Copy Text
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={handleDownloadReport}
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Download Report
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -278,7 +288,8 @@ const handleCopy = () => {
                 Advanced Humanization Features
               </h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                Sophisticated algorithms that understand context and meaning to create authentic human text.
+                Sophisticated algorithms that understand context and meaning to
+                create authentic human text.
               </p>
             </div>
 
@@ -287,7 +298,9 @@ const handleCopy = () => {
                 <div className="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-6 h-6 text-secondary" />
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">Meaning Preservation</h3>
+                <h3 className="font-semibold text-foreground mb-2">
+                  Meaning Preservation
+                </h3>
                 <p className="text-sm text-muted-foreground">
                   Maintains original intent while improving natural flow
                 </p>
@@ -296,7 +309,9 @@ const handleCopy = () => {
                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <Zap className="w-6 h-6 text-primary" />
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">Multiple Styles</h3>
+                <h3 className="font-semibold text-foreground mb-2">
+                  Multiple Styles
+                </h3>
                 <p className="text-sm text-muted-foreground">
                   Choose from academic, creative, professional writing styles
                 </p>
@@ -305,7 +320,9 @@ const handleCopy = () => {
                 <div className="w-12 h-12 bg-success/10 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <RefreshCw className="w-6 h-6 text-success" />
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">AI-Proof Output</h3>
+                <h3 className="font-semibold text-foreground mb-2">
+                  AI-Proof Output
+                </h3>
                 <p className="text-sm text-muted-foreground">
                   Passes AI detection tools while sounding completely natural
                 </p>

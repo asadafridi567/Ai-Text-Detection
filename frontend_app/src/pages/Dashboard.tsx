@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
+import instance from "../api/axios";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("ai-detection");

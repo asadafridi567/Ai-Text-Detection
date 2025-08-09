@@ -8,7 +8,7 @@ import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
 import { Bot, Upload, Download, AlertTriangle, CheckCircle } from "lucide-react";
 import jsPDF from "jspdf";
-
+import instance from "../api/axios";
 
 export default function AIDetection() {
   const [inputText, setInputText] = useState("");
@@ -51,25 +51,16 @@ export default function AIDetection() {
       if (selectedFile) {
         const formData = new FormData();
         formData.append("file", selectedFile);
-
-        response = await fetch("http://localhost:8000/api/ai-check/", {
-          method: "POST",
-          body: formData
+        response = await instance.post("ai-check/", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
         });
       } else {
-        response = await fetch("http://localhost:8000/api/ai-check/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text_content: inputText.trim() })
+        response = await instance.post("ai-check/", {
+          text_content: inputText.trim()
         });
       }
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || "Failed to analyze text.");
-      }
-
-      const data = await response.json();
+      const data = response.data;
 
       setResults({
         aiConfidence: Math.min(100, Math.round(data.ai_percentage || 0)),
@@ -82,43 +73,42 @@ export default function AIDetection() {
       });
     } catch (err: any) {
       console.error("AI Detection Error:", err);
-      setError(err.message || "Something went wrong while analyzing text.");
+      setError(err.response?.data?.detail || err.message || "Something went wrong while analyzing text.");
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   const handleDownloadReport = () => {
-  if (!results) return;
+    if (!results) return;
 
-  const doc = new jsPDF();
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("AI Detection Report", 10, 10);
+    doc.setFontSize(12);
+    doc.text("===================", 10, 20);
 
-  doc.setFontSize(16);
-  doc.text("AI Detection Report", 10, 10);
-  doc.setFontSize(12);
-  doc.text("===================", 10, 20);
+    doc.text(`AI Confidence: ${results.aiConfidence}%`, 10, 30);
+    doc.text(`Human Confidence: ${results.humanConfidence}%`, 10, 40);
 
-  doc.text(`AI Confidence: ${results.aiConfidence}%`, 10, 30);
-  doc.text(`Human Confidence: ${results.humanConfidence}%`, 10, 40);
+    doc.text("Sentence-Level Analysis:", 10, 60);
 
-  doc.text("Sentence-Level Analysis:", 10, 60);
+    let yOffset = 70;
+    results.sentences.forEach((s: any, i: number) => {
+      const line = `${i + 1}. [${s.isAI ? "AI" : "Human"} - ${s.confidence}%] ${s.text}`;
+      const lines = doc.splitTextToSize(line, 180); // wrap text
+      doc.text(lines, 10, yOffset);
+      yOffset += lines.length * 10;
 
-  let yOffset = 70;
-  results.sentences.forEach((s: any, i: number) => {
-    const line = `${i + 1}. [${s.isAI ? "AI" : "Human"} - ${s.confidence}%] ${s.text}`;
-    const lines = doc.splitTextToSize(line, 180); // wrap text
-    doc.text(lines, 10, yOffset);
-    yOffset += lines.length * 10;
+       // Handle page break
+      if (yOffset > 280) {
+        doc.addPage();
+        yOffset = 20;
+      }
+    });
 
-    // Handle page break
-    if (yOffset > 280) {
-      doc.addPage();
-      yOffset = 20;
-    }
-  });
-
-  doc.save("ai-detection-report.pdf");
-};
+    doc.save("ai-detection-report.pdf");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -162,19 +152,19 @@ export default function AIDetection() {
                       }}
                       className="min-h-[200px] resize-none"
                     />
-                      <input
-    type="file"
-    ref={fileInputRef}
-    onChange={handleFileUpload}
-    accept=".pdf,.doc,.docx"
-    className="block w-full text-sm text-gray-700 
-               file:mr-4 file:py-2 file:px-4
-               file:rounded-md file:border-0
-               file:text-sm file:font-semibold
-               file:bg-primary file:text-white
-               hover:file:bg-primary/90
-               focus:outline-none"
-  />
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileUpload}
+                      accept=".pdf,.doc,.docx"
+                      className="block w-full text-sm text-gray-700 
+                                 file:mr-4 file:py-2 file:px-4
+                                 file:rounded-md file:border-0
+                                 file:text-sm file:font-semibold
+                                 file:bg-primary file:text-white
+                                 hover:file:bg-primary/90
+                                 focus:outline-none"
+                    />
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">
                         {inputText.length} / 5000 characters

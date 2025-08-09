@@ -25,7 +25,7 @@ except ImportError:
 
 
 class PlagiarismDetectionView(APIView):
-    #permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
     # Allow both JSON (for direct text input) and MultiPart/Form (for file uploads)
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
@@ -178,12 +178,12 @@ class PDFReportStatusView(APIView):
     
 
 class AIDetectionView(APIView):
-    # permission_classes = [IsAuthenticated] # Uncomment this when ready for authentication
+    permission_classes = [IsAuthenticated] # Uncomment this when ready for authentication
     # Add JSONParser to allow raw JSON body
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     # Define the URL for your Flask AI detection API
-    FLASK_AI_API_URL = "https://e9d475f1850c.ngrok-free.app/check-ai/"
+    FLASK_AI_API_URL = "https://e97d52498afa.ngrok-free.app/check-ai/"
 
     def post(self, request, format=None):
         text_content = None # Initialize text_content to None
@@ -267,10 +267,10 @@ class AIDetectionView(APIView):
 
 
 class HumanizeTextView(APIView):
-    # permission_classes = [IsAuthenticated] # Uncomment this when ready for authentication
+    permission_classes = [IsAuthenticated] # Uncomment this when ready for authentication
     # Allow both JSON (for direct text input) and MultiPart/Form (for file uploads)
     parser_classes = [JSONParser, MultiPartParser, FormParser]
-    FLASK_HUMANIZE_API_URL = "https://e9d475f1850c.ngrok-free.app/humanize/" # Example: Adjust if using ngrok
+    FLASK_HUMANIZE_API_URL = "https://e97d52498afa.ngrok-free.app/humanize/" # Example: Adjust if using ngrok
 
     def post(self, request, format=None):
         text_content = None # Initialize text_content to None

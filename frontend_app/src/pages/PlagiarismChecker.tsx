@@ -1,4 +1,4 @@
-import { useState,useRef } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
@@ -6,134 +6,123 @@ import { Badge } from "../components/ui/badge";
 import { Progress } from "../components/ui/progress";
 import { Header } from "../components/landing/Header";
 import { Footer } from "../components/landing/Footer";
-import {
-  Search,
-  Upload,
-  Download,
-  AlertTriangle,
-  CheckCircle,
-  ExternalLink,
-} from "lucide-react";
-import { jsPDF } from "jspdf"; 
+import { Search, Upload, Download, AlertTriangle, CheckCircle, ExternalLink } from "lucide-react";
+import { jsPDF } from "jspdf";
+import instance from "../api/axios"; // ✅ Axios instance with token handling
 
 export default function PlagiarismChecker() {
   const [inputText, setInputText] = useState("");
   const [isChecking, setIsChecking] = useState(false);
   const [results, setResults] = useState<any>(null);
-  const [reportBlobUrl, setReportBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
-const [selectedFile, setSelectedFile] = useState<File | null>(null);
-const allowedTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
+  const allowedTypes = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ];
 
-const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  if (!allowedTypes.includes(file.type)) {
-    setError("Only PDF and DOCX files are supported.");
-    setSelectedFile(null);
-    return;
-  }
-
-  setError("");
-  setSelectedFile(file);
-  setInputText(""); // Clear text area
-};
-
-
-
-const handleCheck = async () => {
-  if (!inputText.trim() && !selectedFile) return;
-
-  setIsChecking(true);
-  setResults(null);
-  setError("");
-
-  try {
-    let response;
-
-    if (selectedFile) {
-      // File upload case
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-
-      response = await fetch("http://localhost:8000/api/plagiarism-check/", {
-        method: "POST",
-        body: formData
-      });
-    } else {
-      // Text input case
-      response = await fetch("http://localhost:8000/api/plagiarism-check/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ text_content: inputText.trim() })
-      });
+    if (!allowedTypes.includes(file.type)) {
+      setError("Only PDF and DOCX files are supported.");
+      setSelectedFile(null);
+      return;
     }
 
-    if (!response.ok) throw new Error("Plagiarism check failed");
+    setError("");
+    setSelectedFile(file);
+    setInputText(""); // clear textarea
+  };
 
-    const data = await response.json();
-    const originalityScore = data.status === "duplicate_content_found" ? 0 : 100;
-    const matches = data.duplicate_content_found_on_links || [];
+  const handleCheck = async () => {
+    if (!inputText.trim() && !selectedFile) return;
 
-    setResults({
-      originalityScore,
-      matches,
-      totalSources: 15000000000,
-      scanTime: "2.3 seconds"
+    setIsChecking(true);
+    setResults(null);
+    setError("");
+
+    try {
+      let response;
+
+      if (selectedFile) {
+        // File upload case
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+
+        response = await instance.post("plagiarism-check/", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        // Text input case
+        response = await instance.post("plagiarism-check/", {
+          text_content: inputText.trim(),
+        });
+      }
+
+      const data = response.data;
+      const originalityScore = data.status === "duplicate_content_found" ? 0 : 100;
+      const matches = data.duplicate_content_found_on_links || [];
+
+      setResults({
+        originalityScore,
+        matches,
+        totalSources: 15000000000,
+        scanTime: "2.3 seconds",
+      });
+    } catch (err) {
+      console.error("Error checking plagiarism:", err);
+      setError("⚠️ Something went wrong. Please try again.");
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleDownloadReport = () => {
+    if (!results) return;
+
+    const originalityScore = results.originalityScore ?? "N/A";
+    const matches = results.matches ?? [];
+    const totalSources = results.totalSources ?? "N/A";
+    const scanTime = results.scanTime ?? "N/A";
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("Plagiarism Report", 10, 10);
+    doc.setFontSize(12);
+    doc.text("=======================", 10, 20);
+
+    doc.text(`Originality Score: ${originalityScore}%`, 10, 30);
+    doc.text(`Issues Found: ${originalityScore < 100 ? "Yes" : "No"}`, 10, 40);
+    doc.text(
+      `Scanned Sources: ${totalSources.toLocaleString?.() ?? totalSources}`,
+      10,
+      50
+    );
+    doc.text(`Duration: ${scanTime}`, 10, 60);
+
+    doc.text("Potential Matches:", 10, 75);
+
+    const matchesText = matches.length
+      ? matches.map((url: string, i: number) => `${i + 1}. ${url}`).join("\n")
+      : "No matches found.";
+
+    const lines = doc.splitTextToSize(matchesText, 180);
+    let yOffset = 85;
+
+    lines.forEach((line: string) => {
+      if (yOffset > 280) {
+        doc.addPage();
+        yOffset = 20;
+      }
+      doc.text(line, 10, yOffset);
+      yOffset += 10;
     });
 
-  } catch (err) {
-    console.error("Error checking plagiarism:", err);
-    setError("⚠️ Something went wrong. Please try again.");
-  } finally {
-    setIsChecking(false);
-  }
-};
-
-const handleDownloadReport = () => {
-  if (!results) return;
-
-  const originalityScore = results.originalityScore ?? "N/A";
-  const matches = results.matches ?? [];
-  const totalSources = results.totalSources ?? "N/A";
-  const scanTime = results.scanTime ?? "N/A";
-
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text("Plagiarism Report", 10, 10);
-  doc.setFontSize(12);
-  doc.text("=======================", 10, 20);
-
-  doc.text(`Originality Score: ${originalityScore}%`, 10, 30);
-  doc.text(`Issues Found: ${originalityScore < 100 ? "Yes" : "No"}`, 10, 40);
-  doc.text(`Scanned Sources: ${totalSources.toLocaleString?.() ?? totalSources}`, 10, 50);
-  doc.text(`Duration: ${scanTime}`, 10, 60);
-
-  doc.text("Potential Matches:", 10, 75);
-
-  const matchesText = matches.length
-    ? matches.map((url: string, i: number) => `${i + 1}. ${url}`).join("\n")
-    : "No matches found.";
-
-  const lines = doc.splitTextToSize(matchesText, 180);
-  let yOffset = 85;
-
-  lines.forEach((line: string) => {
-    if (yOffset > 280) {
-      doc.addPage();
-      yOffset = 20;
-    }
-    doc.text(line, 10, yOffset);
-    yOffset += 10;
-  });
-
-  doc.save("plagiarism-report.pdf");
-};
-
+    doc.save("plagiarism-report.pdf");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -150,7 +139,8 @@ const handleDownloadReport = () => {
               Plagiarism Checker
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Scan billions of web pages and academic papers to ensure your content is 100% original with detailed source citations.
+              Scan billions of web pages and academic papers to ensure your
+              content is 100% original with detailed source citations.
             </p>
           </div>
         </section>
@@ -168,64 +158,53 @@ const handleDownloadReport = () => {
                       Document Text
                     </CardTitle>
                     <CardDescription>
-                      Paste your content for plagiarism checking
+                      Paste your content or upload a file to check for plagiarism
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-  <Textarea
-    placeholder="Paste your text here to check for plagiarism..."
-    value={inputText}
-    onChange={(e) => {
-      setInputText(e.target.value);
-      setSelectedFile(null); // clear selected file if typing
-    }}
-    className="min-h-[400px] resize-none"
-  />
+                    <Textarea
+                      placeholder="Paste your text here..."
+                      value={inputText}
+                      onChange={(e) => {
+                        setInputText(e.target.value);
+                        setSelectedFile(null);
+                      }}
+                      className="min-h-[400px] resize-none"
+                    />
 
-  {/* Styled File Upload Button */}
-  <input
-  type="file"
-  onChange={handleFileUpload}
-  accept=".pdf,.docx"
-  className="block w-full text-sm text-gray-700 
-         file:mr-4 file:py-2 file:px-4
-         file:rounded-md file:border-0
-         file:text-sm file:font-semibold
-         file:bg-primary file:text-white
-         hover:file:bg-primary/90
-         focus:outline-none"
-/>
+                    <input
+                      type="file"
+                      onChange={handleFileUpload}
+                      accept=".pdf,.docx"
+                      className="block w-full text-sm text-gray-700 
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-md file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-primary file:text-white
+                        hover:file:bg-primary/90
+                        focus:outline-none"
+                    />
 
-  <div className="flex items-center justify-between flex-wrap gap-2">
-    <span className="text-sm text-muted-foreground">
-      {inputText.length} / 10000 characters
-    </span>
-    <Button
-      onClick={handleCheck}
-      disabled={(!inputText.trim() && !selectedFile) || isChecking}
-      variant="hero"
-    >
-      {isChecking ? "Scanning..." : "Check Plagiarism"}
-    </Button>
-  </div>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {inputText.length} / 10000 characters
+                      </span>
+                      <Button
+                        onClick={handleCheck}
+                        disabled={(!inputText.trim() && !selectedFile) || isChecking}
+                        variant="hero"
+                      >
+                        {isChecking ? "Scanning..." : "Check Plagiarism"}
+                      </Button>
+                    </div>
 
-  {error && (
-    <p className="text-sm text-red-500 pt-2">{error}</p>
-  )}
+                    {error && <p className="text-sm text-red-500 pt-2">{error}</p>}
 
-  <div className="text-xs text-muted-foreground">
-    <p>✓ Scans 15+ billion web pages</p>
-    <p>✓ Academic papers and journals</p>
-    <p>✓ Books and publications</p>
-  </div>
-
-{/* ✅ Add this just below the button row */}
-{error && (
-  <p className="text-sm text-red-500 pt-2">
-    {error}
-  </p>
-)}
-
+                    <div className="text-xs text-muted-foreground">
+                      <p>✓ Scans 15+ billion web pages</p>
+                      <p>✓ Academic papers and journals</p>
+                      <p>✓ Books and publications</p>
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -251,7 +230,9 @@ const handleDownloadReport = () => {
                     ) : isChecking ? (
                       <div className="space-y-4 h-[450px] flex items-center justify-center">
                         <div className="text-center w-full">
-                          <div className="text-lg font-semibold mb-4">Scanning for plagiarism...</div>
+                          <div className="text-lg font-semibold mb-4">
+                            Scanning for plagiarism...
+                          </div>
                           <Progress value={65} className="w-full mb-4" />
                           <div className="space-y-2 text-sm text-muted-foreground">
                             <p>✓ Scanning web pages</p>
@@ -267,102 +248,86 @@ const handleDownloadReport = () => {
                           <div className="text-3xl font-bold text-foreground mb-2">
                             {results.originalityScore}%
                           </div>
-                          <Badge variant={results.originalityScore > 90 ? "secondary" : "destructive"} className="mb-2">
-                            {results.originalityScore > 90 ? "Original Content" : "Potential Issues Found"}
+                          <Badge
+                            variant={
+                              results.originalityScore > 90
+                                ? "secondary"
+                                : "destructive"
+                            }
+                            className="mb-2"
+                          >
+                            {results.originalityScore > 90
+                              ? "Original Content"
+                              : "Potential Issues Found"}
                           </Badge>
-                          <p className="text-sm text-muted-foreground">Originality Score</p>
+                          <p className="text-sm text-muted-foreground">
+                            Originality Score
+                          </p>
                           <div className="text-xs text-muted-foreground mt-2">
-                            Scanned {results.totalSources.toLocaleString()} sources in {results.scanTime}
+                            Scanned {results.totalSources.toLocaleString()} sources in{" "}
+                            {results.scanTime}
                           </div>
                         </div>
 
                         {/* Matches */}
                         {results.matches.length > 0 ? (
-  <div className="space-y-4">
-    <h4 className="font-semibold text-foreground flex items-center gap-2">
-      <AlertTriangle className="w-4 h-4 text-warning" />
-      Potential Matches ({results.matches.length})
-    </h4>
-    {results.matches.map((link: string, index: number) => (
-      <div key={index} className="p-4 rounded-lg border space-y-2">
-        <p className="text-sm text-foreground bg-warning/10 p-2 rounded break-all">
-          {link}
-        </p>
-        <div className="flex justify-end">
-          <a href={link} target="_blank" rel="noopener noreferrer">
-            <Button variant="ghost" size="sm" className="text-xs h-6">
-              <ExternalLink className="w-3 h-3 mr-1" />
-              View Source
-            </Button>
-          </a>
-        </div>
-      </div>
-    ))}
-  </div>
-) : (
-  <div className="text-center p-6 bg-success/10 rounded-lg border border-success/20">
-    <CheckCircle className="w-8 h-8 text-success mx-auto mb-2" />
-    <p className="font-semibold text-success">No plagiarism detected!</p>
-    <p className="text-sm text-muted-foreground">Your content appears to be original.</p>
-  </div>
-)}
-
-                         
-                       
+                          <div className="space-y-4">
+                            <h4 className="font-semibold text-foreground flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4 text-warning" />
+                              Potential Matches ({results.matches.length})
+                            </h4>
+                            {results.matches.map((link: string, index: number) => (
+                              <div
+                                key={index}
+                                className="p-4 rounded-lg border space-y-2"
+                              >
+                                <p className="text-sm text-foreground bg-warning/10 p-2 rounded break-all">
+                                  {link}
+                                </p>
+                                <div className="flex justify-end">
+                                  <a
+                                    href={link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-xs h-6"
+                                    >
+                                      <ExternalLink className="w-3 h-3 mr-1" />
+                                      View Source
+                                    </Button>
+                                  </a>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center p-6 bg-success/10 rounded-lg border border-success/20">
+                            <CheckCircle className="w-8 h-8 text-success mx-auto mb-2" />
+                            <p className="font-semibold text-success">
+                              No plagiarism detected!
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Your content appears to be original.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     {results && (
-  <Button onClick={handleDownloadReport} className="mt-4 w-full"  variant="outline">
-    <Download className="w-4 h-4 mr-2" />
-    Download Plagiarism Report
-  </Button>
-)}
+                      <Button
+                        onClick={handleDownloadReport}
+                        className="mt-4 w-full"
+                        variant="outline"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Plagiarism Report
+                      </Button>
+                    )}
                   </CardContent>
-
-
                 </Card>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Features */}
-        <section className="py-16 bg-muted/30">
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-foreground mb-4">Comprehensive Plagiarism Detection</h2>
-              <p className="text-muted-foreground max-w-2xl mx-auto">
-                Our advanced algorithms scan the largest database of sources for maximum accuracy.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-success/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <Search className="w-6 h-6 text-success" />
-                </div>
-                <h3 className="font-semibold text-foreground mb-2">Massive Database</h3>
-                <p className="text-sm text-muted-foreground">
-                  15+ billion web pages, academic papers, and publications
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="font-semibold text-foreground mb-2">Real-time Scanning</h3>
-                <p className="text-sm text-muted-foreground">
-                  Get results in seconds with detailed similarity analysis
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <Download className="w-6 h-6 text-secondary" />
-                </div>
-                <h3 className="font-semibold text-foreground mb-2">Citation Help</h3>
-                <p className="text-sm text-muted-foreground">
-                  Get source information and citation suggestions
-                </p>
               </div>
             </div>
           </div>

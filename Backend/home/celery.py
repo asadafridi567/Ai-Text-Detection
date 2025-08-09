@@ -19,3 +19,5 @@ app.autodiscover_tasks()
 @app.task(bind=True)
 def debug_task(self):
     print(f'Request: {self.request!r}')
+
+# Command to run Celery worker: celery -A home worker --pool=solo --loglevel=info
