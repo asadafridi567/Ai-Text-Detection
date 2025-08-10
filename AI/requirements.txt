@@ -7,3 +7,4 @@ numpy
 google-generativeai
 joblib
 python-dotenv
+scikit-learn==1.6.1
