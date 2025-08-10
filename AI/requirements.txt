@@ -1,0 +1,9 @@
+Flask
+nltk
+transformers
+torch
+textstat
+numpy
+google-generativeai
+joblib
+python-dotenv
