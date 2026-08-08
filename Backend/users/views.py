@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from .serializers import RegisterSerializer, LoginSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import redirect
@@ -88,7 +89,7 @@ class VerifyEmailView(APIView):
             uid = force_str(urlsafe_base64_decode(uidb64))
             user = User.objects.get(pk=uid)
         except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-            return redirect("http://localhost:3000/email-verified/?error=InvalidUserID")
+            return redirect(f"{settings.FRONTEND_URL}/email-verified/?error=InvalidUserID")
 
         if account_activation_token.check_token(user, token):
             user.is_active = True
@@ -100,10 +101,10 @@ class VerifyEmailView(APIView):
 
             # 🔁 Redirect with tokens in query string
             return redirect(
-                f"http://localhost:3000/email-verified/?access={access_token}&refresh={refresh_token}"
+                f"{settings.FRONTEND_URL}/email-verified/?access={access_token}&refresh={refresh_token}"
             )
         else:
-            return redirect("http://localhost:3000/email-verified/?error=InvalidOrExpiredToken")
+            return redirect(f"{settings.FRONTEND_URL}/email-verified/?error=InvalidOrExpiredToken")
 
 
 class ProtectedExampleView(APIView):
@@ -116,7 +117,7 @@ class ProtectedExampleView(APIView):
 @login_required
 def google_login_callback(request):
     user = request.user
-    redirect_base = getattr(settings, "FRONTEND_CALLBACK_URL", "http://localhost:5173/login/callback/")
+    redirect_base = getattr(settings, "FRONTEND_CALLBACK_URL", f"{settings.FRONTEND_URL}/login/callback/")
 
     try:
         social_account = SocialAccount.objects.filter(user=user).first()
@@ -145,6 +146,7 @@ def google_login_callback(request):
 
 
 class SessionLogoutView(APIView):
+    authentication_classes = [SessionAuthentication]
     permission_classes = [AllowAny] # Allow any request to hit this, even if not authenticated
 
     def post(self, request):
@@ -157,6 +159,7 @@ class SessionLogoutView(APIView):
 
 # NEW: API View to check if a session is active
 class CheckSessionView(APIView):
+    authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated] # Only authenticated users (via session) can access
 
     def get(self, request):

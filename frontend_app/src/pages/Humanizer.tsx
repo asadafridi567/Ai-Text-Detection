@@ -72,7 +72,9 @@ export default function Humanizer() {
         res = await instance.post("humanize/", { text: inputText });
       }
 
-      setOutputText(res.data.modified_text || "No output received.");
+      setOutputText(
+        res.data.modified_text || res.data.humanized_text || "No output received."
+      );
     } catch (err: any) {
       console.error("Humanization Error:", err);
       setError(

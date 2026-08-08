@@ -14,7 +14,7 @@ import os
 from .services import check_plagiarism
 from .utils import get_text_from_file # Import your new utility
 import requests # Keep for exception handling
-
+from django.conf import settings
 
 try:
     from weasyprint import HTML, CSS
@@ -34,8 +34,10 @@ class PlagiarismDetectionView(APIView):
         uploaded_file = None
 
         # 1. Try to get text from JSON body (for direct text input)
-        if 'text_content' in request.data:
+        if 'text_content' in request.data and isinstance(request.data['text_content'], str):
             text_content = request.data.get('text_content')
+        elif 'text' in request.data and isinstance(request.data['text'], str):
+            text_content = request.data.get('text')
 
         # 2. Try to get text from uploaded file
         if 'file' in request.FILES:
@@ -178,12 +180,11 @@ class PDFReportStatusView(APIView):
     
 
 class AIDetectionView(APIView):
-    permission_classes = [IsAuthenticated] # Uncomment this when ready for authentication
-    # Add JSONParser to allow raw JSON body
+    permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     # Define the URL for your Flask AI detection API
-    FLASK_AI_API_URL = "https://e97d52498afa.ngrok-free.app/check-ai/"
+    FLASK_AI_API_URL = settings.FLASK_AI_API_URL
 
     def post(self, request, format=None):
         text_content = None # Initialize text_content to None
@@ -192,6 +193,9 @@ class AIDetectionView(APIView):
         # request.data handles parsed data from various parsers
         if 'text_content' in request.data and isinstance(request.data['text_content'], str):
             text_content = request.data.get('text_content')
+            print(f"Received JSON text content: {text_content[:50]}...") # For debugging
+        elif 'text' in request.data and isinstance(request.data['text'], str):
+            text_content = request.data.get('text')
             print(f"Received JSON text: {text_content[:50]}...") # For debugging
 
         # 2. If no text from JSON, check for file upload
@@ -267,10 +271,9 @@ class AIDetectionView(APIView):
 
 
 class HumanizeTextView(APIView):
-    permission_classes = [IsAuthenticated] # Uncomment this when ready for authentication
-    # Allow both JSON (for direct text input) and MultiPart/Form (for file uploads)
+    permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser, FormParser]
-    FLASK_HUMANIZE_API_URL = "https://e97d52498afa.ngrok-free.app/humanize/" # Example: Adjust if using ngrok
+    FLASK_HUMANIZE_API_URL = settings.FLASK_HUMANIZE_API_URL
 
     def post(self, request, format=None):
         text_content = None # Initialize text_content to None
@@ -279,6 +282,9 @@ class HumanizeTextView(APIView):
         if isinstance(request.data, dict) and 'text' in request.data and isinstance(request.data['text'], str):
             text_content = request.data.get('text')
             print(f"Humanize: Received JSON text: {text_content[:50]}...") # For debugging
+        elif isinstance(request.data, dict) and 'text_content' in request.data and isinstance(request.data['text_content'], str):
+            text_content = request.data.get('text_content')
+            print(f"Humanize: Received JSON text_content: {text_content[:50]}...") # For debugging
 
         # 2. If no text from JSON, check for file upload
         elif 'file' in request.FILES:

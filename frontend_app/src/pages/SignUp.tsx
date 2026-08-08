@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { AxiosError } from "axios";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -13,6 +14,7 @@ import {
 } from "../components/ui/card";
 import { useToast } from "../hooks/use-toast";
 import { FcGoogle } from "react-icons/fc";
+import axios, { API_BASE_URL } from "../api/axios";
 
 const GoogleIcon = FcGoogle as unknown as React.FC<{ className?: string }>;
 
@@ -50,43 +52,47 @@ const SignUp = () => {
     }
 
     setIsLoading(true);
+
     try {
-      const res = await fetch("http://localhost:8000/api/register/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, email, password }),
+      // Shared axios instance instead of a raw fetch + a locally hardcoded
+      // API_BASE_URL, so this inherits baseURL, timeout, and interceptors
+      // from one place instead of drifting out of sync with other pages.
+      const res = await axios.post("/register/", { name, email, password });
+
+      toast({
+        title: "Account Created",
+        description: "Please check your email to verify your account.",
       });
+      navigate("/email-verification", { replace: true });
+    } catch (error) {
+      const axiosError = error as AxiosError<{ error?: string }>;
 
-      const data = await res.json();
-
-      if (res.status === 201) {
-        toast({
-          title: "Account Created",
-          description: "Please check your email to verify your account.",
-        });
-        navigate("/email-verification", { replace: true });
-      } else {
+      if (axiosError.response) {
+        // Backend responded but rejected the signup (e.g. email taken,
+        // weak password, validation error)
+        const data = axiosError.response.data;
         toast({
           variant: "destructive",
           title: "Signup Failed",
           description: data?.error || JSON.stringify(data),
         });
+      } else {
+        // No response at all — backend unreachable, wrong URL, CORS, timeout
+        toast({
+          variant: "destructive",
+          title: "Server Error",
+          description: "Something went wrong. Please try again later.",
+        });
       }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Server Error",
-        description: "Something went wrong. Please try again later.",
-      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignUp = () => {
-    window.location.href = "http://localhost:8000/accounts/google/login/";
+    // API_BASE_URL comes from the shared axios config (env-driven), not a
+    // hardcoded Codespaces URL that only works in this one environment.
+    window.location.href = `${API_BASE_URL}/accounts/google/login/`;
   };
 
   return (

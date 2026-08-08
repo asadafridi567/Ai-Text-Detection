@@ -6,11 +6,17 @@ import google.generativeai as genai
 import torch, textstat, re
 import numpy as np
 import os
+import logging
 import nltk
 from joblib import load
 from dotenv import load_dotenv
+
 # Load environment variables
 load_dotenv()
+
+# Basic logging so container logs (docker compose logs ai) are useful
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -18,16 +24,44 @@ app = Flask(__name__)
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "ai_text_detection_model", "ai_detection_model.joblib")
 clf = load(MODEL_PATH)
 
-# Load GPT-2 tokenizer and model
+# --- NLTK data + stopwords ---
+# These downloads were missing before, and `stop_words` was referenced in
+# extract_features() without ever being defined — that caused a NameError
+# on the very first request. Also added the newer *_eng / _tab resource
+# names some NLTK versions require in addition to the classic ones.
+for resource in ["punkt", "punkt_tab", "averaged_perceptron_tagger",
+                  "averaged_perceptron_tagger_eng", "stopwords"]:
+    try:
+        nltk.download(resource, quiet=True)
+    except Exception as e:
+        logger.warning(f"Could not download NLTK resource '{resource}': {e}")
+
+stop_words = set(stopwords.words('english'))
+
+# --- GPT-2 for perplexity scoring ---
+logger.info("Loading GPT-2 tokenizer/model for perplexity scoring...")
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
 gpt2_model.eval()
 
-# Load Gemini Api key into model
+# --- Gemini (used by /humanize/) ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+if not GEMINI_API_KEY:
+    # Don't crash the whole service — /check-ai/ doesn't need Gemini at all,
+    # only /humanize/ does. Log loudly instead so it's obvious in
+    # `docker compose logs ai` rather than a silent 500 later.
+    logger.warning(
+        "GEMINI_API_KEY is not set. /humanize/ will fail until it is "
+        "configured in AI/.env."
+    )
+else:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # Humanizer using text-generation model (can use gpt2 or distilgpt2)
+# NOTE: this loads a second GPT-2 pipeline in addition to the one above.
+# It's currently unused by any route below — kept as-is from the original
+# notebook in case you wire it in later, but it does add extra memory/
+# startup time. Remove if you don't end up using it.
 humanizer = pipeline("text-generation", model="gpt2", tokenizer="gpt2")
 set_seed(42)
 
@@ -39,7 +73,8 @@ def get_perplexity(text):
         with torch.no_grad():
             output = gpt2_model(**encodings, labels=encodings['input_ids'])
         return torch.exp(output.loss).item()
-    except:
+    except Exception as e:
+        logger.warning(f"Perplexity calculation failed, defaulting to 100.0: {e}")
         return 100.0
 
 def extract_features(text):
@@ -63,6 +98,12 @@ def split_sentences(text):
 
 
 def rewrite_sentence(sentence):
+    if not GEMINI_API_KEY:
+        # Fail gracefully per-sentence instead of raising, since the whole
+        # request will otherwise 500 with a confusing traceback.
+        logger.warning("rewrite_sentence called without GEMINI_API_KEY configured.")
+        return sentence
+
     # Aggressively refined prompt to get ONLY the single rewritten sentence
     prompt = (
         f"Rewrite the following sentence to sound more natural, personal, "
@@ -109,15 +150,23 @@ def rewrite_sentence(sentence):
         # --- END OF ROBUST POST-PROCESSING ---
         return rewritten
     except Exception as e:
-        print(f"Rewrite error: {e}")
+        logger.error(f"Rewrite error: {e}")
         return sentence # Fallback to original sentence on error
 
 
-# --- API Route ---
+# --- API Routes ---
+
+@app.route("/health/", methods=["GET"])
+def health():
+    # Lightweight endpoint for docker-compose healthchecks / manual checks,
+    # so you can confirm the container is up without sending a real
+    # detection request (which is slow due to GPT-2 perplexity scoring).
+    return jsonify({"status": "ok"}), 200
+
 
 @app.route("/check-ai/", methods=["POST"])
 def detect_ai():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     text = data.get("text", "")
     if not text:
         return jsonify({"error": "No input text provided"}), 400
@@ -156,7 +205,7 @@ def detect_ai():
 
 @app.route("/humanize/", methods=["POST"])
 def humanize_text():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     text = data.get("text", "")
     if not text:
         return jsonify({"error": "No input text provided"}), 400
@@ -185,4 +234,8 @@ def humanize_text():
 
 # Start the Flask app
 if __name__ == "__main__":
+    # host=0.0.0.0 is required so the container accepts connections from
+    # outside itself (e.g. from the "backend" service on the Docker
+    # network) — 127.0.0.1 would only accept connections from inside this
+    # same container.
     app.run(host="0.0.0.0", port=5000)

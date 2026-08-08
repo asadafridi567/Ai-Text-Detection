@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'; // For v5
 import axios from 'axios';
 
 // Base URL for your Django API
-const API_BASE_URL = "http://localhost:8000/api";
+const API_BASE_URL = "https://refactored-goldfish-7gvr59r44ggcp56g-8000.app.github.dev/api";
 
 export function useAuth() {
   interface TokenRefreshResponse {

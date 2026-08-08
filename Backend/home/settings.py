@@ -13,12 +13,28 @@ dotenv.load_dotenv()
 # Base Directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = '(c@9=wl&3=c#nm@=5#hn$#dpw5zqm0vvmojfcr!d7%&7&ofz2n'
+# SECURITY WARNING: keep the secret key used in production secret!
+# Was previously hardcoded in this file (and committed to git) — moved to
+# .env. Generate a new one (don't reuse the old leaked value) with:
+#   python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY environment variable not set. Generate one and add it "
+        "to your .env file."
+    )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = []
+# Was previously hardcoded and defined twice in this file (the first
+# definition near the top was dead code, silently overridden by a second
+# definition near the bottom containing a stale ngrok URL). Now a single,
+# env-driven list. Comma-separated in .env, e.g.:
+#   ALLOWED_HOSTS=127.0.0.1,localhost,your-real-backend-host.example.com
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+
+CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
 
 # Application definition
 INSTALLED_APPS = [
@@ -48,6 +64,7 @@ SITE_ID = 1
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -111,6 +128,13 @@ USE_TZ = True
 
 # Static files
 STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default auto field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -122,7 +146,6 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_THROTTLE_CLASSES': (
         'rest_framework.throttling.ScopedRateThrottle',
@@ -153,7 +176,13 @@ AUTHENTICATION_BACKENDS = (
     'allauth.account.auth_backends.AuthenticationBackend',  # Allauth backend
 )
 
-LOGIN_REDIRECT_URL = 'http://localhost:3000/'
+# Was hardcoded to localhost:3000 — now env-driven so it matches wherever
+# the frontend actually is (Codespaces URL, real domain, etc.)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+LOGIN_REDIRECT_URL = f"{FRONTEND_URL}/"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+FLASK_AI_API_URL = os.getenv("FLASK_AI_API_URL", "http://localhost:5000/check-ai/")
+FLASK_HUMANIZE_API_URL = os.getenv("FLASK_HUMANIZE_API_URL", "http://localhost:5000/humanize/")
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
@@ -183,49 +212,53 @@ EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True") == "True"
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+# NOTE: Gmail requires an App Password here (Google Account > Security >
+# App Passwords), not your normal account password — plain password SMTP
+# auth is rejected by Gmail with a 534 SMTPAuthenticationError.
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 4  # 4 hours
 
 # CSRF
 CSRF_COOKIE_NAME = "csrftoken"
-CSRF_COOKIE_HTTPONLY = False # <--- Add this line or change to False
+CSRF_COOKIE_HTTPONLY = False  # frontend JS needs to read this cookie
 
-# Add these lines at the end or in a dedicated "API Keys" section
+# RapidAPI (third-party plagiarism-checking service via rapidapi.com —
+# unrelated to the "ai" container/service in this project)
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 PLAGIARISM_API_HOST = os.getenv("PLAGIARISM_API_HOST")
 
-# Ensure these are not None in production
 if not RAPIDAPI_KEY:
     raise ValueError("RAPIDAPI_KEY environment variable not set.")
 if not PLAGIARISM_API_HOST:
     raise ValueError("PLAGIARISM_API_HOST environment variable not set.")
 
 # Celery Configuration
-CELERY_BROKER_URL = 'redis://127.0.0.1:6379/0' # Use your Redis URL
-CELERY_RESULT_BACKEND = 'redis://127.0.0.1:6379/0' # Use your Redis URL
+# Was hardcoded to 127.0.0.1, which inside Docker refers to this
+# container itself, not the "redis" service — Celery would never actually
+# reach Redis. Now reads REDIS_URL, same as the CACHES config below,
+# resolving to the "redis" service name on Docker's internal network.
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'Asia/Karachi' # Or your appropriate timezone
+CELERY_TIMEZONE = 'Asia/Karachi'  # Or your appropriate timezone
 CELERY_ENABLE_UTC = True
 
 # Directory where generated PDFs will be stored temporarily
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-MEDIA_URL = '/media/' 
+MEDIA_URL = '/media/'
 
-ALLOWED_HOSTS = [
-    '127.0.0.1',  # Standard localhost IP
-    'localhost',  # Standard localhost name
-    'c00edd481226.ngrok-free.app', # <<< REPLACE THIS WITH YOUR ACTUAL NGROK URL
-]
-
-  
-""" Redis cache
+# Redis cache
+# Was previously wrapped in a docstring (dead code, never actually
+# executed) — now active. Uses the same REDIS_URL as Celery above but a
+# different DB index (/1 vs /0) to keep cache and task queue data separate.
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
+        "LOCATION": os.getenv("REDIS_CACHE_URL", "redis://127.0.0.1:6379/1"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         }
@@ -233,5 +266,5 @@ CACHES = {
 }
 
 # File upload limit
+# Was also inside the dead docstring above along with CACHES — now active.
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5 MB
-"""

@@ -1,12 +1,12 @@
-# Step 1: Build the React app
 FROM node:20-alpine AS build
 WORKDIR /app
+ENV GENERATE_SOURCEMAP=false
+ENV NODE_OPTIONS=--max-old-space-size=1536
 COPY package*.json ./
 RUN npm install
 COPY . .
 RUN npm run build
 
-# Step 2: Serve the static files
 FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80

@@ -42,6 +42,7 @@ python-dateutil==2.9.0.post0
 python-decouple==3.8
 python-docx==1.2.0
 python-dotenv==1.1.1
+whitenoise==6.7.0
 redis==6.2.0
 requests==2.32.4
 rsa==4.9.1
@@ -58,3 +59,4 @@ weasyprint==65.1
 webencodings==0.5.1
 zopfli==0.2.3.post1
 gunicorn
+django-redis==5.4.0
