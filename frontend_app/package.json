@@ -58,12 +58,12 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
     "web-vitals": "^2.1.0",
-    "zod": "^4.0.14"
+    "zod": "^3.22.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@playwright/test": "^1.41.0",
     "@tailwindcss/typography": "^0.5.15",
-    "@types/axios": "^0.9.36",
     "@types/node": "^22.5.5",
     "@types/react": "^18.2.21",
     "@types/react-dom": "^18.2.7",
@@ -73,6 +73,7 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
+    "playwright": "^1.41.0",
     "postcss": "^8.4.24",
     "tailwindcss": "^3.4.1",
     "typescript": "^4.9.5",
@@ -80,6 +81,9 @@
   },
   "scripts": {
     "start": "react-scripts start",
+    "e2e:install": "playwright install --with-deps",
+    "e2e:test": "playwright test",
+    "e2e:test:headed": "playwright test --headed",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

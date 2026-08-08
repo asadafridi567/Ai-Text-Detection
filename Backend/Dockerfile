@@ -17,6 +17,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # --- Stage 2: Final application image ---
 FROM python:3.11-slim
 
+# Install runtime dependencies required by weasyprint and other binary packages
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libglib2.0-0 \
+    libgirepository-1.0-1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Set the working directory inside the container to the Backend folder
 # This is a key change to fix the 'can't chdir' error.
 WORKDIR /app/Backend
@@ -27,6 +38,14 @@ COPY --from=build-env /usr/local/lib/python3.11/site-packages /usr/local/lib/pyt
 COPY --from=build-env /usr/local/bin/ /usr/local/bin/
 COPY . .
 
+# Entrypoint script: waits for the DB, then runs migrations and
+# collectstatic before starting Gunicorn. Runs at container *startup*,
+# not build time, since postgres/redis aren't reachable during `docker
+# build` (they're separate containers that only exist once the whole
+# compose stack is actually running).
+COPY entrypoint.sh /app/Backend/entrypoint.sh
+RUN chmod +x /app/Backend/entrypoint.sh
+
 # Add the parent working directory to the Python path
 ENV PYTHONPATH="${PYTHONPATH}:/app"
 
@@ -36,5 +55,5 @@ ENV DJANGO_SETTINGS_MODULE=Backend.home.settings
 # Expose port 8000 for the app
 EXPOSE 8000
 
-# Run Gunicorn server to serve your Django app from the current directory
-CMD ["gunicorn", "home.wsgi:application", "--bind", "0.0.0.0:8000"]
+# Run migrations, then start Gunicorn to serve the Django app
+ENTRYPOINT ["/app/Backend/entrypoint.sh"]

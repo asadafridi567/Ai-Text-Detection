@@ -47,79 +47,72 @@ export default function Dashboard() {
     localStorage.removeItem("refresh_token");
     navigate("/");
   };
-const handleAnalyze = async () => {
-  setIsAnalyzing(true);
-  setResults(null);
-  setError("");
 
-  let endpoint = "";
-  if (activeTab === "ai-detection") endpoint = "/api/ai-check/";
-  if (activeTab === "humanizer") endpoint = "/api/humanize/";
-  if (activeTab === "plagiarism") endpoint = "/api/plagiarism-check/";
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    setResults(null);
+    setError("");
 
-  try {
-    let response;
-    if (file) {
-      const formData = new FormData();
-      formData.append("file", file);
-      response = await fetch("http://localhost:8000" + endpoint, {
-        method: "POST",
-        body: formData,
-      });
-    } else {
-      response = await fetch("http://localhost:8000" + endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ text_content: inputText.trim() }),
-      });
+    let endpoint = "";
+    let payload: any = {};
+
+    if (activeTab === "ai-detection") endpoint = "ai-check/";
+    if (activeTab === "humanizer") endpoint = "humanize/";
+    if (activeTab === "plagiarism") endpoint = "plagiarism-check/";
+
+    try {
+      let response;
+
+      if (file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        response = await instance.post(endpoint, formData);
+      } else {
+        if (activeTab === "humanizer") {
+          payload = { text: inputText.trim() };
+        } else {
+          payload = { text_content: inputText.trim() };
+        }
+        response = await instance.post(endpoint, payload);
+      }
+
+      const data = response.data;
+
+      if (activeTab === "ai-detection") {
+        setResults({
+          aiConfidence: Math.min(100, Math.round(data.ai_percentage || 0)),
+          humanConfidence: Math.max(0, 100 - Math.round(data.ai_percentage || 0)),
+          sentences:
+            data.sentence_predictions
+              ?.filter((item: any) => item.sentence?.trim())
+              .map((item: any) => ({
+                text: item.sentence,
+                confidence: Math.round((item.ai_probability || 0) * 100),
+                isAI: item.label === "AI-Generated",
+              })) || [],
+        });
+      } else if (activeTab === "humanizer") {
+        setResults({
+          modified_text: data.humanized_text || data.modified_text || "",
+        });
+      } else if (activeTab === "plagiarism") {
+        setResults({
+          originalityScore: data.status === "duplicate_content_found" ? 0 : 100,
+          matches: data.duplicate_content_found_on_links || [],
+          totalSources: 15000000000,
+          scanTime: "2.3 seconds",
+        });
+      }
+    } catch (err: any) {
+      console.error("Analysis failed:", err);
+      const msg = err?.response?.data?.detail || err.message || "Something went wrong.";
+      setError(msg);
+    } finally {
+      setIsAnalyzing(false);
     }
+  };
 
-    if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(errData.detail || "Analysis failed.");
-    }
-
-    const data = await response.json();
-    console.log("🧪 Response from backend:", data);
-
-    // Transform response based on tab
-    if (activeTab === "ai-detection") {
-      setResults({
-        aiConfidence: Math.min(100, Math.round(data.ai_percentage || 0)),
-        humanConfidence: Math.max(0, 100 - Math.round(data.ai_percentage || 0)),
-        sentences:
-          data.sentence_predictions
-            ?.filter((item) => item.sentence?.trim())
-            .map((item) => ({
-              text: item.sentence,
-              confidence: Math.round((item.ai_probability || 0) * 100),
-              isAI: item.label === "AI-Generated",
-            })) || [],
-      });
-    } else if (activeTab === "humanizer") {
-      setResults({
-        humanizedText: data.humanized_text || "",
-      });
-    } else if (activeTab === "plagiarism") {
-  setResults({
-  originalityScore: data.status === "duplicate_content_found" ? 0 : 100,
-  matches: data.duplicate_content_found_on_links || [],
-  totalSources: 15000000000,
-  scanTime: "2.3 seconds",
-});
-
-}
-  } catch (err: any) {
-    console.error("Analysis failed:", err);
-    setError(err.message || "Something went wrong.");
-  } finally {
-    setIsAnalyzing(false);
-  }
-};
-
-const handleDownloadReport = () => {
+  const handleDownloadReport = () => {
   if (!results) return alert("No content to download.");
   
   const doc = new jsPDF();

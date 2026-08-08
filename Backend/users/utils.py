@@ -11,7 +11,7 @@ def send_activation_email(request, user):
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = account_activation_token.make_token(user)
 
-    activation_link = f"{request.scheme}://{request.get_host()}/api/verify-email/{uid}/{token}/"
+    activation_link = f"{settings.BACKEND_URL}/api/verify-email/{uid}/{token}/"
 
     subject = "Activate your account"
     message = f"Hi,\nPlease click the link to verify your email:\n{activation_link}"

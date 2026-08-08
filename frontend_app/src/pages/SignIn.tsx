@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AxiosError } from "axios";
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -17,7 +18,7 @@ import {
 } from "../components/ui/card";
 import { FcGoogle } from "react-icons/fc";
 import { useToast } from "../hooks/use-toast";
-import axios from "../api/axios";
+import axios, { API_BASE_URL } from "../api/axios";
 
 const SignInSchema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
@@ -47,40 +48,43 @@ const SignIn = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/login/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
+      // Use the shared axios instance instead of a raw fetch + a second
+      // hardcoded API_BASE_URL. This ensures baseURL, timeout, and
+      // interceptors are consistent everywhere in the app.
+      const response = await axios.post("/login/", data);
+      const result = response.data;
+
+      localStorage.setItem("access_token", result.access);
+      localStorage.setItem("refresh_token", result.refresh);
+
+      toast({
+        title: "Login Successful",
+        description: "Welcome back!",
       });
 
-      const result = await response.json();
+      // redirect to the intended page
+      navigate(redirectPath, { replace: true });
+    } catch (error) {
+      const axiosError = error as AxiosError<{ error?: string; detail?: string }>;
 
-      if (response.ok) {
-        localStorage.setItem("access_token", result.access);
-        localStorage.setItem("refresh_token", result.refresh);
-
-        toast({
-          title: "Login Successful",
-          description: "Welcome back!",
-        });
-
-        // redirect to the intended page
-        navigate(redirectPath, { replace: true });
-      } else {
+      if (axiosError.response) {
+        // Backend responded, but rejected the request (bad credentials, etc.)
         toast({
           title: "Login Failed",
-          description: result.error || "Invalid credentials",
+          description:
+            axiosError.response.data?.error ||
+            axiosError.response.data?.detail ||
+            "Invalid credentials",
+          variant: "destructive",
+        });
+      } else {
+        // No response at all — backend unreachable, wrong URL, CORS, timeout, etc.
+        toast({
+          title: "Server Error",
+          description: "Unable to connect to the server. Please try again.",
           variant: "destructive",
         });
       }
-    } catch (error) {
-      toast({
-        title: "Server Error",
-        description: "Unable to connect to the server. Please try again.",
-        variant: "destructive",
-      });
     } finally {
       setIsLoading(false);
     }
@@ -99,8 +103,10 @@ const SignIn = () => {
       }
     }
 
-    // preserve redirect path for Google OAuth too
-    window.location.href = `http://localhost:8000/accounts/google/login/?redirect=${encodeURIComponent(
+    // preserve redirect path for Google OAuth too.
+    // API_BASE_URL comes from the shared axios config (env-driven), not a
+    // hardcoded Codespaces URL that will break outside this one environment.
+    window.location.href = `${API_BASE_URL}/accounts/google/login/?redirect=${encodeURIComponent(
       redirectPath
     )}`;
   };
@@ -125,6 +131,7 @@ const SignIn = () => {
               <Label htmlFor="email">Email Address</Label>
               <Input
                 id="email"
+                data-testid="email-input"
                 type="email"
                 placeholder="e.g. jane.doe@example.com"
                 {...register("email")}
@@ -138,6 +145,7 @@ const SignIn = () => {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                data-testid="password-input"
                 type="password"
                 placeholder="••••••••"
                 {...register("password")}
@@ -149,7 +157,7 @@ const SignIn = () => {
           </CardContent>
 
           <CardFooter className="flex flex-col gap-3">
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" data-testid="sign-in-submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Signing In..." : "Sign In"}
             </Button>
 
@@ -164,7 +172,7 @@ const SignIn = () => {
             </Button>
 
             <p className="text-sm text-muted-foreground text-center">
-              Don’t have an account?{" "}
+              Don't have an account?{" "}
               <Link to="/sign-up" className="text-primary hover:underline">
                 Sign up
               </Link>
