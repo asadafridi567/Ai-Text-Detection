@@ -14,6 +14,11 @@ import SignIn from "./pages/SignIn";
 import ProtectedRoute from "./components/ProtectedRoute";
 import EmailVerification from "pages/EmailVerification";
 import EmailVerified from "./pages/EmailVerified";
+import Blogs from "./pages/Blogs";
+import BlogDetail from "./pages/BlogDetail";
+import About from "./pages/About";
+import ContactUs from "./pages/ContactUs";
+import LoginCallback from "./pages/LoginCallback";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +72,11 @@ const App = () => (
           <Route path="/email-verification" element={<EmailVerification />} />
           {/* Email verification */}
           <Route path="/email-verified" element={<EmailVerified />} />
+          <Route path="/blogs" element={<Blogs />} />
+          <Route path="/blogs/:slug" element={<BlogDetail />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<ContactUs />} />
+          <Route path="/login/callback" element={<LoginCallback />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

@@ -1,13 +1,13 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-const EmailVerified = () => {
+const LoginCallback = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const access = params.get("access");
-    const refresh = params.get("refresh");
+    const access = params.get("access_token");
+    const refresh = params.get("refresh_token");
     const error = params.get("error");
 
     if (error) {
@@ -20,7 +20,6 @@ const EmailVerified = () => {
       localStorage.setItem("refresh_token", refresh);
       navigate("/", { replace: true });
     } else {
-      // No tokens found — maybe show an error or send them to login
       navigate("/sign-in", { replace: true });
     }
   }, [navigate]);
@@ -44,10 +43,10 @@ const EmailVerified = () => {
           </svg>
         </div>
         <h3 className="text-2xl font-bold text-gray-800">
-          Verifying your email...
+          Signing you in...
         </h3>
         <p className="mt-2 text-gray-600">
-          Just a moment while we log you in automatically.
+          Just a moment while we complete your Google sign-in.
         </p>
       </div>
 
@@ -69,4 +68,4 @@ const EmailVerified = () => {
   );
 };
 
-export default EmailVerified;
+export default LoginCallback;
