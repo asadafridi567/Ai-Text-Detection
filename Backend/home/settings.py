@@ -36,6 +36,9 @@ ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
 
 CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
 
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -179,8 +182,8 @@ AUTHENTICATION_BACKENDS = (
 # Was hardcoded to localhost:3000 — now env-driven so it matches wherever
 # the frontend actually is (Codespaces URL, real domain, etc.)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-LOGIN_REDIRECT_URL = f"{FRONTEND_URL}/"
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
+LOGIN_REDIRECT_URL = f"{BACKEND_URL}/api/callback/"
 FLASK_AI_API_URL = os.getenv("FLASK_AI_API_URL", "http://localhost:5000/check-ai/")
 FLASK_HUMANIZE_API_URL = os.getenv("FLASK_HUMANIZE_API_URL", "http://localhost:5000/humanize/")
 

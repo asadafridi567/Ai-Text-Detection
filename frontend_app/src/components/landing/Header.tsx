@@ -53,24 +53,24 @@ useEffect(() => {
             open ? "opacity-100 visible" : "opacity-0 invisible"
           }`}
         >
-          <a
-            href="/ai-detection"
+          <Link
+            to="/ai-detection"
             className="block px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             AI Detection
-          </a>
-          <a
-            href="/humanizer"
+          </Link>
+          <Link
+            to="/humanizer"
             className="block px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             Humanize Text
-          </a>
-          <a
-            href="/plagiarism-checker"
+          </Link>
+          <Link
+            to="/plagiarism-checker"
             className="block px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             Plagiarism Checker
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -136,7 +136,7 @@ useEffect(() => {
               AI Detection
             </Link>
             <Link
-              to="/humanize-text"
+              to="/humanizer"
               className="block text-muted-foreground hover:text-foreground transition-colors py-1"
             >
               Humanize Text
